@@ -20,6 +20,11 @@ lsu_sim:
 	xelab -top lsu_tb -snapshot sim --debug wave
 	xsim sim --runall
 
+mac_sim:
+	@verilator -Wall --cc --trace --timing ./dv/sv/mac_tb.sv ./rtl/custom/mac.sv --top-module mac_tb --exe ./dv/verilator/mac.cpp 2>&1 > /dev/null
+	@make -j -C obj_dir -f Vmac_tb.mk Vmac_tb 2>&1 > /dev/null
+	./obj_dir/Vmac_tb
+
 decodes:
 	python3 tools/dec_table_gen.py rtl/idu/decode
 
