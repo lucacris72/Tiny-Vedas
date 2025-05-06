@@ -178,23 +178,31 @@ def compare_results(test: str) -> None:
         rtl_log = f.read()
     iss_exe = []
     rtl_exe = []
-    for line in iss_log.split("\n"):
-        if line != "":
-            line = line.split(";") 
-            iss_exe.append({
-            'pc': line[0],
-            'instr': line[1],
-            'mnemonic': line[2],
-            'touch': line[3:]
+    # -----  ISS log  -----
+    for raw in iss_log.splitlines():
+        if ";" not in raw:
+            continue
+        parts = raw.split(";")
+        if len(parts) < 3:
+            continue
+        iss_exe.append({
+            'pc': parts[0],
+            'instr': parts[1],
+            'mnemonic': parts[2],
+            'touch': parts[3:]
         })
-    for line in rtl_log.split("\n"):
-        if line != "":
-            line = line.split(";")
-            rtl_exe.append({
-                'pc': line[1],
-                'instr': line[2],
-                'touch': line[3:]
-            })
+    # -----  RTL log  -----
+    for raw in rtl_log.splitlines():
+        if ";" not in raw:
+            continue
+        parts = raw.split(";")
+        if len(parts) < 3:
+            continue
+        rtl_exe.append({
+            'pc': parts[1],
+            'instr': parts[2],
+            'touch': parts[3:]
+        })
 
     # Compare the logs
     test_passed = True
@@ -240,7 +248,10 @@ def process_rtl_log(test: str):
     while line_idx < len(rtl_log.split("\n"))-2:
         line = rtl_log.split("\n")[line_idx].split(";")
         nxt_line = rtl_log.split("\n")[line_idx + 1].split(";")
-        if line not in ["", " "] and nxt_line not in ["", " "] and line[1] == nxt_line[1] and line[2] == nxt_line[2] and "Nothing": # Merge them
+        if len(line) < 3 or len(nxt_line) < 3:
+            line_idx += 1
+            continue
+        if line[1] == nxt_line[1] and line[2] == nxt_line[2] and "Nothing":  # Merge them
             effect = line[3]
             nxt_effect = nxt_line[3]
             # Get the memory address

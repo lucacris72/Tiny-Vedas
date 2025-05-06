@@ -92,7 +92,32 @@ module core_top #(
   logic      [                XLEN-1:0] exu_instr_out;
   logic      [                XLEN-1:0] instr_tag;
 
+  /* Performance Monitor Unit (PMU) */
+  logic incr_cycle;     // sempre 1
+  logic incr_instr;     // pulse @commit
+  logic commit_valid;   // pulse @commit
+  logic [63:0] mcycle_q, minstret_q;
+
   /* Modules Instantiations */
+
+  /* Performance Monitor Unit (PMU) */
+
+  assign incr_cycle = 1'b1; 
+  assign commit_valid = exu_wb_rd_wr_en | dccm_wen | ifu_inst.pc_load;
+  assign incr_instr = commit_valid; //exu_wb_rd_wr_en & ~pc_load;
+  perf_counter #(
+        .CNT_WIDTH(64)
+    ) pmu_inst (
+        .clk(clk),
+        .rst_n(rst_n),
+        .incr_cycle(incr_cycle),
+        .incr_instr(incr_instr),
+        .csr_we(1'b0),
+        .csr_addr(12'd0),
+        .csr_wdata('0),
+        .mcycle_q(mcycle_q),
+        .minstret_q(minstret_q)
+    );
 
   /* Instruction Memory */
   iccm #(

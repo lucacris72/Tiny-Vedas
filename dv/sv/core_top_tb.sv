@@ -109,6 +109,11 @@ module core_top_tb;
       $fdisplay(fd, "%5d;0x%H;0x%H;x%0D=0x%H", cycle_count, core_top_i.exu_instr_tag_out,
                 core_top_i.exu_instr_out, core_top_i.exu_wb_rd_addr, core_top_i.exu_wb_data);
     end
+    if (finish_seq_detected) begin
+      $fdisplay(fd, "Simulation finished successfully at cycle %0d", cycle_count);
+      $fdisplay(fd, "MCYCLE   = %0d", core_top_i.pmu_inst.mcycle_q);
+      $fdisplay(fd, "MINSTRET = %0d", core_top_i.pmu_inst.minstret_q);
+    end
     if (core_top_i.exu_wb_rd_wr_en & core_top_i.ifu_inst.pc_load) begin  /* JAL/JALR */
       $fdisplay(fd, "%5d;0x%H;0x%H;x%0D=0x%H;pc=0x%H", cycle_count, core_top_i.exu_instr_tag_out,
                 core_top_i.exu_instr_out, core_top_i.exu_wb_rd_addr, core_top_i.exu_wb_data,
