@@ -25,3 +25,5 @@ riscv64-unknown-elf-gcc -march=rv32im -mabi=ilp32 -o <path-to-output-file> -nost
 python3 tools/sim_manager.py -s verilator -n <test-name>
 ```
 
+NB <test-name> in the format asm.nameofthetest
+NB To disassemble elf executable (in order to know how the assembly as been translated): riscv64-unknown-elf-objdump -D <elf file>
