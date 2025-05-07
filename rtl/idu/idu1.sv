@@ -130,6 +130,7 @@ module idu1 #(
   assign idu1_out_i.rem = idu0_out.rem;
   assign idu1_out_i.nop = idu0_out.nop;
   assign idu1_out_i.legal = idu0_out.legal;
+  assign idu1_out_i.mac = idu0_out.mac;
 
   dff_rst_en_flush #(
       .WIDTH($bits(idu1_out_t))

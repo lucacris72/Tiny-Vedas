@@ -67,8 +67,8 @@ module core_top #(
   logic                                 pipe_stall;
 
   /* EXU -> IDU1 (WB) Interface */
-  logic      [                XLEN-1:0] exu_wb_data = '0;
-  logic      [                     4:0] exu_wb_rd_addr = '0;
+  logic      [                XLEN-1:0] exu_wb_data;
+  logic      [                     4:0] exu_wb_rd_addr;
   logic                                 exu_wb_rd_wr_en = '0;
   logic                                 exu_mul_busy;
   logic                                 exu_div_busy;

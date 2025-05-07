@@ -1,5 +1,7 @@
 .definition
 
+mac =     [0000000----------000-----0001011]
+
 nop =     [00000000000000000000000000010011]
 add =     [0000000..........000.....0110011]
 addi =    [.................000.....0010011]
@@ -142,9 +144,12 @@ rv32i = {
       div
       rem
       nop
+      mac
 }
 
 .decode
+
+rv32i[mac] = { mac rs1 rs2 rd pm_alu }
 
 rv32i[mul]    = { mul rs1 rs2 rd low }
 rv32i[mulh]   = { mul rs1 rs2 rd rs1_sign rs2_sign }

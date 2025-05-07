@@ -64,6 +64,14 @@ module exu (
     output logic            pc_load
 );
 
+  logic [2*XLEN-1:0] mac_result;
+  logic              mac_en;
+  logic [XLEN-1:0] rs1_data = idu1_out.rs1_data;
+  logic [XLEN-1:0] rs2_data = idu1_out.rs2_data;
+  logic [4:0]      rd_addr  = idu1_out.rd_addr;
+  logic [XLEN-1:0] instr_tag= idu1_out.instr_tag;
+  logic [31:0]     instr    = instr_out;
+
   logic [XLEN-1:0] alu_wb_data;
   logic [     4:0] alu_wb_rd_addr;
   logic            alu_wb_rd_wr_en;
@@ -153,27 +161,48 @@ module exu (
       .lsu_dccm_wdata     (dccm_wdata)
   );
 
+  mac #(.WIDTH(XLEN)) mac_i (
+      .clk     (clk),
+      .rst_n   (rst_n),
+      .en      (mac_en),
+      .clr     (1'b0),
+      .a       (rs1_data),
+      .b       (rs2_data),
+      .acc_out (mac_result)
+  );
+
+  assign mac_en = idu1_out.mac;
+
   assign exu_wb_data = ({XLEN{alu_wb_rd_wr_en}} & alu_wb_data) | 
                        ({XLEN{mul_wb_rd_wr_en}} & mul_wb_data) | 
                        ({XLEN{div_wb_rd_wr_en}} & div_wb_data) |
-                       ({XLEN{lsu_wb_rd_wr_en}} & lsu_wb_data);
+                       ({XLEN{lsu_wb_rd_wr_en}} & lsu_wb_data) |
+                       ({XLEN{mac_en}}          & mac_result[XLEN-1:0]) ;
 
   assign exu_wb_rd_addr = ({5{alu_wb_rd_wr_en}} & alu_wb_rd_addr) | 
                           ({5{mul_wb_rd_wr_en}} & mul_wb_rd_addr) | 
                           ({5{div_wb_rd_wr_en}} & div_wb_rd_addr) |
-                          ({5{lsu_wb_rd_wr_en}} & lsu_wb_rd_addr);
+                          ({5{lsu_wb_rd_wr_en}} & lsu_wb_rd_addr) |
+                          ({5{mac_en}}          & rd_addr);
 
-  assign exu_wb_rd_wr_en = alu_wb_rd_wr_en | mul_wb_rd_wr_en | div_wb_rd_wr_en | lsu_wb_rd_wr_en;
+  assign exu_wb_rd_wr_en = 
+       alu_wb_rd_wr_en 
+     | mul_wb_rd_wr_en 
+     | div_wb_rd_wr_en 
+     | lsu_wb_rd_wr_en
+     | mac_en;
 
   /* ONLY FOR DEBUG */
   assign instr_tag_out = ({XLEN{alu_wb_rd_wr_en}} & alu_instr_tag_out) | 
                          ({XLEN{mul_wb_rd_wr_en}} & mul_instr_tag_out) | 
                          ({XLEN{div_wb_rd_wr_en}} & div_instr_tag_out) |
-                         ({XLEN{lsu_wb_rd_wr_en}} & lsu_instr_tag_out);
+                         ({XLEN{lsu_wb_rd_wr_en}} & lsu_instr_tag_out) |
+                         ({XLEN{mac_en}}          & instr_tag);
 
   assign instr_out = ({32{alu_wb_rd_wr_en}} & alu_instr_out) | 
                      ({32{mul_wb_rd_wr_en}} & mul_instr_out) | 
                      ({32{div_wb_rd_wr_en}} & div_instr_out) |
-                     ({32{lsu_wb_rd_wr_en}} & lsu_instr_out);
+                     ({32{lsu_wb_rd_wr_en}} & lsu_instr_out) |
+                     ({32{mac_en}}          & instr);
 
 endmodule
