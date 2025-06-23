@@ -220,25 +220,13 @@ module idu1 #(
       pipe_stall = exu_lsu_busy;
     end
 
-    // --- MAC cases (pipelined) --------------------------------------------
-    else if ( last_issued_instr.mac
-           & ~idu1_out_gated.mac
-           &  idu1_out_gated.legal
-           & ~idu1_out_gated.nop
-    ) begin
-      // stallo finché la MAC precedente non ha terminato
-      pipe_stall = exu_mac_busy;
-    end
-    else if ( last_issued_instr.mac
-           &   idu1_out_gated.mac
-           &  ((last_issued_instr.rd_addr == idu1_out_gated.rs1_addr)
-            | (last_issued_instr.rd_addr == idu1_out_gated.rs2_addr))
-           &   idu1_out_gated.legal
-           & ~idu1_out_gated.nop
-    ) begin
-      // stallo se due MAC consecutive dipendono dallo stesso registro
-      pipe_stall = exu_mac_busy;
-    end
+  // --- MAC case: serializziamo tutte le MAC in flight -------------------
+  else if ( last_issued_instr.mac        // l’ultima emessa era una MAC
+         &  idu1_out_gated.legal        // la prossima è un’istruzione valida
+         & ~idu1_out_gated.nop          // e non è NOP
+  ) begin
+    pipe_stall = exu_mac_busy;          // stallo finché la MAC non ha finito
+  end
 
     // Propaga lo stall da LSU (se presente)
     pipe_stall |= exu_lsu_stall;
@@ -246,8 +234,13 @@ module idu1 #(
 
   // Mantieni uguale la logica di validità/legality perché idu1_out.nop venga imposto
   always_comb begin : pipe_stall_output
-    idu1_out        = idu1_out_gated;
-    idu1_out.legal = idu1_out_gated.legal & ~pipe_stall;
+    if (pipe_stall) begin
+      // Se stiamo in stall, non facciamo entrare alcuna istruzione
+      idu1_out = '0;
+    end else begin
+      // Altrimenti passiamo al prossimo stadio tutto il pacchetto di segnali
+      idu1_out = idu1_out_gated;
+    end
   end
 
 
