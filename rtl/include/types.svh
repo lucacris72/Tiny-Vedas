@@ -74,6 +74,7 @@ typedef struct packed {
   logic low;
   logic div;
   logic rem;
+  logic mac;
   logic nop;
   logic legal;
 } idu0_out_t;
@@ -116,6 +117,7 @@ typedef struct packed {
   logic low;
   logic div;
   logic rem;
+  logic mac;
   logic nop;
   logic legal;
 } decode_out_t;
@@ -170,6 +172,7 @@ typedef struct packed {
   logic low;
   logic div;
   logic rem;
+  logic mac;
   logic nop;
   logic legal;
 } idu1_out_t;
@@ -181,6 +184,7 @@ typedef struct packed {
   logic [4:0] rs2_addr;
   logic [4:0] rd_addr;
   logic mul;
+  logic mac;
   logic alu;
   logic div;
   logic lsu;

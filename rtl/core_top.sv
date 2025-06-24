@@ -72,6 +72,7 @@ module core_top #(
   logic                                 exu_wb_rd_wr_en = '0;
   logic                                 exu_mul_busy;
   logic                                 exu_div_busy;
+  logic                                 exu_mac_busy;
   logic                                 exu_lsu_busy;
   logic                                 exu_lsu_stall;
 
@@ -178,6 +179,7 @@ module core_top #(
       .exu_wb_rd_addr (exu_wb_rd_addr),
       .exu_wb_rd_wr_en(exu_wb_rd_wr_en),
       .exu_mul_busy   (exu_mul_busy),
+      .exu_mac_busy   (exu_mac_busy),
       .exu_div_busy   (exu_div_busy),
       .exu_lsu_busy   (exu_lsu_busy),
       .exu_lsu_stall  (exu_lsu_stall),
@@ -199,6 +201,7 @@ module core_top #(
       .exu_mul_busy   (exu_mul_busy),
       .exu_div_busy   (exu_div_busy),
       .exu_lsu_busy   (exu_lsu_busy),
+      .exu_mac_busy   (exu_mac_busy),
       .exu_lsu_stall  (exu_lsu_stall),
       .dccm_raddr     (dccm_raddr),
       .dccm_rvalid_in (dccm_rvalid_in),

@@ -50,6 +50,7 @@ module idu1 #(
     input  logic [     4:0] exu_wb_rd_addr,
     input  logic            exu_wb_rd_wr_en,
     input  logic            exu_mul_busy,
+    input  logic            exu_mac_busy,
     input  logic            exu_div_busy,
     input  logic            exu_lsu_busy,
     input  logic            exu_lsu_stall
@@ -123,6 +124,7 @@ module idu1 #(
   assign idu1_out_i.half = idu0_out.half;
   assign idu1_out_i.word = idu0_out.word;
   assign idu1_out_i.mul = idu0_out.mul;
+  assign idu1_out_i.mac = idu0_out.mac;
   assign idu1_out_i.rs1_sign = idu0_out.rs1_sign;
   assign idu1_out_i.rs2_sign = idu0_out.rs2_sign;
   assign idu1_out_i.low = idu0_out.low;
@@ -154,6 +156,7 @@ module idu1 #(
         idu1_out_before_fwd.rs2_addr,
         idu1_out_before_fwd.rd_addr,
         idu1_out_before_fwd.mul,
+        idu1_out_before_fwd.mac,
         idu1_out_before_fwd.alu,
         idu1_out_before_fwd.div,
         (idu1_out_before_fwd.load | idu1_out_before_fwd.store)
@@ -177,29 +180,82 @@ module idu1 #(
   end
 
   /* Manage The pipe_stall signal 
-    We stall the pipeline in the following conditions:
-    1. The instruction executing is a multiply operation and the coming instruction is not a multiply operation
-    2. The instruction executing is a mulitply operation and the coming instruction is a multiply operation that depends on the result of the previous multiply operation (to leverage the pipelined multiply unit)
-    3. The instruction executing is a divide operation (it's a blocking operation, so no pipelining)
+     Stallo per MUL, DIV, LSU e MAC con forwarding tra MAC consecutive:
+       1. Se è in corso una MUL e la prossima è un’istruzione valida ≠ MUL → stall finché exu_mul_busy
+       2. Se è in corso una MUL e la prossima è MUL dipendente → stall finché exu_mul_busy
+       3. Se è in corso una DIV → stall finché exu_div_busy
+       4. Se è in corso una LSU e la prossima è un’istruzione valida ≠ LSU → stall finché exu_lsu_busy
+       5. Se è in corso una MAC e la prossima è MAC non dipendente → NO STALL
+       6. Se è in corso una MAC e la prossima è MAC dipendente → stall finché exu_mac_busy
   */
   always_comb begin : pipe_stall_management
     pipe_stall = 1'b0;
-    if (last_issued_instr.mul & ~idu1_out_gated.mul & idu1_out_gated.legal & ~idu1_out_gated.nop) begin
+
+    // --- MUL cases --------------------------------------------------------
+    if ( last_issued_instr.mul
+      & ~idu1_out_gated.mul
+      &  idu1_out_gated.legal
+      & ~idu1_out_gated.nop
+    ) begin
       pipe_stall = exu_mul_busy;
     end
-    else if (last_issued_instr.mul & idu1_out_gated.mul & ((last_issued_instr.rd_addr == idu1_out_gated.rs1_addr) | (last_issued_instr.rd_addr == idu1_out_gated.rs2_addr)) & idu1_out_gated.legal & ~idu1_out_gated.nop) begin
+    else if ( last_issued_instr.mul
+           &   idu1_out_gated.mul
+           &  ((last_issued_instr.rd_addr == idu1_out_gated.rs1_addr)
+            | (last_issued_instr.rd_addr == idu1_out_gated.rs2_addr))
+           &   idu1_out_gated.legal
+           & ~idu1_out_gated.nop
+    ) begin
       pipe_stall = exu_mul_busy;
-    end else if (last_issued_instr.div) begin
+    end
+    // --- DIV case --------------------------------------------------------
+    else if (last_issued_instr.div) begin
       pipe_stall = exu_div_busy;
-    end else if (last_issued_instr.lsu & ~idu1_out_gated.lsu & idu1_out_gated.legal & ~idu1_out_gated.nop) begin /* Always stall LSU operations */
+    end
+    // --- LSU case --------------------------------------------------------
+    else if ( last_issued_instr.lsu
+           & ~idu1_out_gated.lsu
+           &  idu1_out_gated.legal
+           & ~idu1_out_gated.nop
+    ) begin
       pipe_stall = exu_lsu_busy;
     end
+
+    // --- MAC cases --------------------------------------------------------
+    // 5.a Se è in corso una MAC e la prossima NON è MAC → stall finché mac_busy
+    else if ( last_issued_instr.mac
+           & ~idu1_out_gated.mac
+           &  idu1_out_gated.legal
+           & ~idu1_out_gated.nop
+    ) begin
+      pipe_stall = exu_mac_busy;
+    end
+    // 6.b Se due MAC consecutive dipendono dallo stesso rd_addr → stall finché mac_busy
+    else if ( last_issued_instr.mac
+           &   idu1_out_gated.mac
+           &  ((last_issued_instr.rd_addr == idu1_out_gated.rs1_addr)
+            | (last_issued_instr.rd_addr == idu1_out_gated.rs2_addr))
+           &   idu1_out_gated.legal
+           & ~idu1_out_gated.nop
+    ) begin
+      pipe_stall = exu_mac_busy;
+    end
+
+    // Propaga lo stall da LSU (se presente)
     pipe_stall |= exu_lsu_stall;
   end
 
+
+  // Mantieni uguale la logica di validità/legality perché idu1_out.nop venga imposto
   always_comb begin : pipe_stall_output
-    idu1_out = idu1_out_gated;
-    idu1_out.legal = idu1_out_gated.legal & ~pipe_stall;
+    if (pipe_stall) begin
+      // Se stiamo in stall, non facciamo entrare alcuna istruzione
+      idu1_out = '0;
+    end else begin
+      // Altrimenti passiamo al prossimo stadio tutto il pacchetto di segnali
+      idu1_out = idu1_out_gated;
+    end
   end
+
 
 endmodule
