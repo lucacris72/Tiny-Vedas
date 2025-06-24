@@ -62,7 +62,12 @@ module exu (
 
     /* PC Interface */
     output logic [XLEN-1:0] pc_out,
-    output logic            pc_load
+    output logic            pc_load,
+
+    output logic            exu_is_branch_out,
+    output logic            exu_branch_taken_out,
+    output logic [XLEN-1:0] exu_branch_pc_out
+
 );
 
   logic [XLEN-1:0] alu_wb_data;
@@ -84,6 +89,10 @@ module exu (
   logic [XLEN-1:0] mac_wb_data;
   logic [     4:0] mac_wb_rd_addr;
   logic            mac_wb_rd_wr_en;
+
+  logic            alu_is_branch;
+  logic            alu_branch_taken;
+  logic [XLEN-1:0] alu_branch_pc;
 
   /* ONLY FOR DEBUG */
   logic [XLEN-1:0] alu_instr_tag_out;
@@ -107,7 +116,10 @@ module exu (
       .instr_tag_out  (alu_instr_tag_out),
       .instr_out      (alu_instr_out),
       .pc_out         (pc_out),
-      .pc_load        (pc_load)
+      .pc_load        (pc_load),
+      .exu_is_branch_out (alu_is_branch),
+      .exu_branch_taken_out (alu_branch_taken),
+      .exu_branch_pc_out (alu_branch_pc)
   );
 
   mul mul_inst (
@@ -172,6 +184,19 @@ module exu (
       .lsu_dccm_wen       (dccm_wen),
       .lsu_dccm_wdata     (dccm_wdata)
   );
+
+  always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+          exu_is_branch_out    <= 1'b0;
+          exu_branch_taken_out <= 1'b0;
+          exu_branch_pc_out    <= '0;
+      end else begin
+          // Ad ogni ciclo, campiona i valori combinatori che arrivano dall'ALU
+          exu_is_branch_out    <= alu_is_branch;
+          exu_branch_taken_out <= alu_branch_taken;
+          exu_branch_pc_out    <= alu_branch_pc;
+      end
+  end
 
   assign exu_wb_data = ({XLEN{alu_wb_rd_wr_en}} & alu_wb_data) | 
                        ({XLEN{mul_wb_rd_wr_en}} & mul_wb_data) | 

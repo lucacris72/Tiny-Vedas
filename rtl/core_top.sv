@@ -58,6 +58,7 @@ module core_top #(
   /* IFU -> IDU0 Interface */
   logic      [           INSTR_LEN-1:0] instr;
   logic                                 instr_valid;
+  logic                                 predicted_taken_from_ifu;
 
   /* IDU0 -> IDU1 Interface */
   idu0_out_t                            idu0_out;
@@ -79,6 +80,11 @@ module core_top #(
   /* EXU -> PC Interface */
   logic      [                XLEN-1:0] pc_out;
   logic                                 pc_load;
+
+  /* EXU -> IFU Interface */
+  logic                                 branch_feedback_is_branch;
+  logic                                 branch_feedback_taken;
+  logic      [                    31:0] branch_feedback_pc;
 
   /* Data Memory */
   logic      [                XLEN-1:0] dccm_raddr;
@@ -152,7 +158,11 @@ module core_top #(
       .instr_tag            (instr_tag),
       .pipe_stall           (pipe_stall),
       .pc_exu               (pc_out),
-      .pc_load              (pc_load)
+      .pc_load              (pc_load),
+      .predicted_taken_out  (predicted_taken_from_ifu),
+      .exu_is_branch        (branch_feedback_is_branch),
+      .exu_branch_taken     (branch_feedback_taken),
+      .exu_branch_pc        (branch_feedback_pc)
   );
 
   /* Instruction Decode Unit - Stage 0 */
@@ -162,6 +172,7 @@ module core_top #(
       .instr      (instr),
       .instr_valid(instr_valid),
       .instr_tag  (instr_tag),
+      .predicted_taken_from_ifu(predicted_taken_from_ifu),
       .pipe_stall (pipe_stall),
       .idu0_out   (idu0_out),
       .pipe_flush (pc_load)
@@ -211,7 +222,10 @@ module core_top #(
       .dccm_wen       (dccm_wen),
       .dccm_wdata     (dccm_wdata),
       .pc_out         (pc_out),
-      .pc_load        (pc_load)
+      .pc_load        (pc_load),
+      .exu_is_branch_out    (branch_feedback_is_branch),
+      .exu_branch_taken_out (branch_feedback_taken),
+      .exu_branch_pc_out    (branch_feedback_pc)
   );
 
   dccm #(

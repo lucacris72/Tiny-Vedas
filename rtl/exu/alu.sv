@@ -45,7 +45,11 @@ module alu (
     output logic            alu_wb_rd_wr_en,
 
     output logic [XLEN-1:0] pc_out,
-    output logic            pc_load
+    output logic            pc_load,
+
+    output logic            exu_is_branch_out,
+    output logic            exu_branch_taken_out,
+    output logic [XLEN-1:0] exu_branch_pc_out
 
 );
 
@@ -106,7 +110,16 @@ module alu (
 
   assign brn_taken = (alu_ctrl.beq & eq) | (alu_ctrl.bne & ne) | (alu_ctrl.bge & ge) | (alu_ctrl.blt & lt);
 
-  assign pc_vld = (alu_ctrl.jal | (alu_ctrl.condbr & brn_taken)) & alu_ctrl.legal & ~alu_ctrl.nop & alu_ctrl.alu;
+  logic mispredict;
+  assign mispredict = alu_ctrl.condbr && (brn_taken != alu_ctrl.predicted_taken);
+
+  assign exu_is_branch_out = alu_ctrl.condbr & alu_ctrl.legal & ~alu_ctrl.nop & alu_ctrl.alu;
+
+  assign exu_branch_taken_out = brn_taken;
+
+  assign exu_branch_pc_out = alu_ctrl.instr_tag;
+
+  assign pc_vld = (alu_ctrl.jal | mispredict) & alu_ctrl.legal & ~alu_ctrl.nop & alu_ctrl.alu;
 
 
   assign ashift[XLEN-1:0] = $signed(a) >>> b[$clog2(XLEN)-1:0];

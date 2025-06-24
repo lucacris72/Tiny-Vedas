@@ -36,6 +36,7 @@ typedef struct packed {
   logic                    imm_valid;
   logic [4:0]              rd_addr;
   logic [$clog2(XLEN)-1:0] shamt;
+  logic                    predicted_taken;
 
   /* Automatically generated */
   logic alu;
@@ -134,6 +135,7 @@ typedef struct packed {
   logic                    imm_valid;
   logic [4:0]              rd_addr;
   logic [$clog2(XLEN)-1:0] shamt;
+  logic                    predicted_taken;
 
   /* Automatically generated */
   logic alu;

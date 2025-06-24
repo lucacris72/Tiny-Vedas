@@ -43,20 +43,43 @@ module ifu (
     /* EXU -> IFU Interface */
     input logic [XLEN-1:0] pc_exu,
     input logic            pc_load,
+    input logic            exu_is_branch,
+    input logic            exu_branch_taken,
+    input logic [XLEN-1:0] exu_branch_pc,
 
     /* Control Signals */
     input  logic                 pipe_stall,
     output logic [INSTR_LEN-1:0] instr,
     output logic                 instr_valid,
-    output logic [     XLEN-1:0] instr_tag
+    output logic [     XLEN-1:0] instr_tag,
+
+    output logic predicted_taken_out
 );
 
   logic [XLEN-1:0] pc_out;
   logic            pc_out_valid;
+  
+  logic predicted_taken;
 
   assign instr_mem_addr = pc_out[INSTR_MEM_ADDR_WIDTH-1:0];  /* Crop the PC since the instr_mem_addr
                                                                 is narrower than the PC */
   assign instr_mem_tag_out = pc_out;
+
+  bht #(
+        .BHT_ENTRIES(1024) // Puoi parametrizzare questo valore se vuoi
+    ) i_bht (
+        .clk(clk),
+        .rst_n(rst_n),
+
+        // Interfaccia di PREDIZIONE
+        .predict_pc(pc_out),              // Predici usando il PC corrente
+        .predict_taken(predicted_taken),  // Qui riceviamo la predizione (0 o 1)
+
+        // Interfaccia di AGGIORNAMENTO
+        .update_en(exu_is_branch),        // Aggiorna solo se l'istruzione in EXU era un branch
+        .update_pc(exu_branch_pc),        // PC del branch da aggiornare
+        .update_actual_taken(exu_branch_taken) // Esito reale del branch
+    );
 
   /* Instantiate the Program Counter */
   pc pc_inst (
@@ -74,11 +97,11 @@ module ifu (
   assign instr_mem_addr_valid = pc_out_valid & ~pc_load;
 
   /* Generate the outputs */
-  dff_rst_en_flush #(INSTR_LEN + 1 + XLEN) instr_dff_rst_inst (
+  dff_rst_en_flush #(INSTR_LEN + 1 + XLEN + 1) instr_dff_rst_inst (
       .clk  (clk),
       .rst_n(rst_n),
-      .din  ({instr_mem_rdata_valid, instr_mem_rdata, instr_mem_tag_in}),
-      .dout ({instr_valid, instr, instr_tag}),
+      .din  ({predicted_taken, instr_mem_rdata_valid, instr_mem_rdata, instr_mem_tag_in}),
+      .dout ({predicted_taken_out, instr_valid, instr, instr_tag}),
       .en   (~pipe_stall),
       .flush(pc_load)
   );

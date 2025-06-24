@@ -41,6 +41,8 @@ module idu0 (
     input logic                 instr_valid,
     input logic [     XLEN-1:0] instr_tag,
 
+    input logic                 predicted_taken_from_ifu,
+
     /* Control Signals */
     input logic pipe_stall,
     input logic pipe_flush,
@@ -79,6 +81,8 @@ module idu0 (
 
   assign idu0_out_i.rd_addr = instr[11:7];
   assign idu0_out_i.shamt = instr[24:20];
+
+  assign idu0_out_i.predicted_taken = predicted_taken_from_ifu;
 
   assign idu0_out_i.alu = decode_out.alu;
   assign idu0_out_i.rs1 = decode_out.rs1;
