@@ -17,11 +17,12 @@ loop_start:
     # Decrementiamo il contatore del loop.
     addi    x10, x10, -1
 
+
     # Branch condizionale: torna a 'loop_start' se x10 non è zero.
     # Questo branch sarà preso 4 volte e non preso l'ultima volta.
     # Ci aspettiamo che il predittore impari questo comportamento.
     bne     x10, x0, loop_start
-
+    
     # Il loop è terminato.
     # Il codice arriva qui dopo che il branch 'bne' non è stato preso.
 

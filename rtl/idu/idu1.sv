@@ -62,6 +62,9 @@ module idu1 #(
   last_issued_instr_t last_issued_instr;
   idu1_out_t idu1_out_gated;
 
+  localparam NOP_INSTR = 32'h00000013;
+
+
   /* Instantiate Register file */
   reg_file #(
       .STACK_POINTER_INIT_VALUE(STACK_POINTER_INIT_VALUE)
@@ -168,17 +171,17 @@ module idu1 #(
       .flush(pipe_flush)
   );
 
-  /* WB to EXU forwarding */
+  /* WB to EXU forwarding (CORRETTO) */
   always_comb begin : operand_forwarding
-    idu1_out_gated = idu1_out_before_fwd;
+      idu1_out_gated = idu1_out_before_fwd;
+       // Aggiunto il controllo 'exu_wb_rd_wr_en' per un forwarding sicuro
+      if (idu1_out_before_fwd.rs1 & exu_wb_rd_wr_en & (exu_wb_rd_addr == idu1_out_before_fwd.rs1_addr)) begin
+          idu1_out_gated.rs1_data = exu_wb_data;
+      end
 
-    if (idu1_out_before_fwd.rs1 & (exu_wb_rd_addr == idu1_out_before_fwd.rs1_addr)) begin
-      idu1_out_gated.rs1_data = exu_wb_data;
-    end
-
-    if (idu1_out_before_fwd.rs2 & (exu_wb_rd_addr == idu1_out_before_fwd.rs2_addr)) begin
-      idu1_out_gated.rs2_data = exu_wb_data;
-    end
+      if (idu1_out_before_fwd.rs2 & exu_wb_rd_wr_en & (exu_wb_rd_addr == idu1_out_before_fwd.rs2_addr)) begin
+          idu1_out_gated.rs2_data = exu_wb_data;
+      end
   end
 
   /* Manage The pipe_stall signal 
@@ -191,7 +194,7 @@ module idu1 #(
        6. Se è in corso una MAC e la prossima è MAC dipendente → stall finché exu_mac_busy
   */
   always_comb begin : pipe_stall_management
-    pipe_stall = 1'b0;
+    pipe_stall = 1'b0; // Inizialmente non c'è stallo
 
     // --- MUL cases --------------------------------------------------------
     if ( last_issued_instr.mul
@@ -248,15 +251,23 @@ module idu1 #(
   end
 
 
-  // Mantieni uguale la logica di validità/legality perché idu1_out.nop venga imposto
   always_comb begin : pipe_stall_output
-    if (pipe_stall) begin
-      // Se stiamo in stall, non facciamo entrare alcuna istruzione
-      idu1_out = '0;
-    end else begin
-      // Altrimenti passiamo al prossimo stadio tutto il pacchetto di segnali
-      idu1_out = idu1_out_gated;
-    end
+      if (pipe_stall) begin
+          // In caso di stallo, inseriamo una "bolla" (NOP) invece di azzerare.
+          // Questo previene la corruzione dei segnali di controllo come `predicted_taken`.
+          idu1_out = '0; // Iniziamo azzerando tutto per sicurezza
+          idu1_out.instr = NOP_INSTR;
+          idu1_out.legal = 1'b1;   // Il NOP è un'istruzione legale
+          idu1_out.nop   = 1'b1;   // Segnaliamo esplicitamente che è un NOP
+          idu1_out.alu   = 1'b1;   // Il NOP usa l'unità ALU
+          idu1_out.add   = 1'b1;   // Nello specifico, è un addi
+          idu1_out.imm12 = 1'b1;
+          idu1_out.rd    = 1'b1;   // Anche se rd=x0
+          idu1_out.rs1   = 1'b1;   // Anche se rs1=x0
+      end else begin
+          // Altrimenti, passiamo i dati al prossimo stadio
+          idu1_out = idu1_out_gated;
+      end
   end
 
 

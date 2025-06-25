@@ -46,6 +46,7 @@ module ifu (
     input logic            exu_is_branch,
     input logic            exu_branch_taken,
     input logic [XLEN-1:0] exu_branch_pc,
+    input logic [XLEN-1:0] exu_target_pc,
 
     /* Control Signals */
     input  logic                 pipe_stall,
@@ -59,28 +60,38 @@ module ifu (
   logic [XLEN-1:0] pc_out;
   logic            pc_out_valid;
   
-  logic predicted_taken;
+  logic            bht_predicted_taken;
+  logic            btb_hit;
+  logic [XLEN-1:0] btb_target_pc;
+  logic            predict_take_branch;
 
   assign instr_mem_addr = pc_out[INSTR_MEM_ADDR_WIDTH-1:0];  /* Crop the PC since the instr_mem_addr
                                                                 is narrower than the PC */
   assign instr_mem_tag_out = pc_out;
 
-  bht #(
-        .BHT_ENTRIES(1024) // Puoi parametrizzare questo valore se vuoi
-    ) i_bht (
-        .clk(clk),
-        .rst_n(rst_n),
+  bht #( .BHT_ENTRIES(1024) ) i_bht (
+      .clk                (clk),
+      .rst_n              (rst_n),
+      .predict_pc         (instr_mem_tag_in),
+      .predict_taken      (bht_predicted_taken),
+      .update_en          (exu_is_branch),
+      .update_pc          (exu_branch_pc),
+      .update_actual_taken(exu_branch_taken)
+  );
 
-        // Interfaccia di PREDIZIONE
-        .predict_pc(pc_out),              // Predici usando il PC corrente
-        .predict_taken(predicted_taken),  // Qui riceviamo la predizione (0 o 1)
+  btb #( .BTB_ENTRIES(1024) ) i_btb (
+      .clk               (clk),
+      .rst_n             (rst_n),
+      .predict_pc        (instr_mem_tag_in),
+      .predict_hit       (btb_hit),
+      .predict_target_pc (btb_target_pc),
+      .update_en         (exu_is_branch && exu_branch_taken), // Scriviamo solo se il branch è preso
+      .update_pc         (exu_branch_pc),
+      .update_target_pc  (exu_target_pc)
+  );
 
-        // Interfaccia di AGGIORNAMENTO
-        .update_en(exu_is_branch),        // Aggiorna solo se l'istruzione in EXU era un branch
-        .update_pc(exu_branch_pc),        // PC del branch da aggiornare
-        .update_actual_taken(exu_branch_taken) // Esito reale del branch
-    );
-
+  assign predict_take_branch = bht_predicted_taken && btb_hit;
+    
   /* Instantiate the Program Counter */
   pc pc_inst (
       .clk         (clk),
@@ -91,16 +102,18 @@ module ifu (
       .stall       (pipe_stall),
       .pc_in       (pc_exu),
       .pc_out      (pc_out),
-      .pc_out_valid(pc_out_valid)
+      .pc_out_valid(pc_out_valid),
+      .predict_take_branch  (predict_take_branch),
+      .predict_target_pc_in (btb_target_pc)
   );
 
-  assign instr_mem_addr_valid = pc_out_valid & ~pc_load;
+  assign instr_mem_addr_valid = pc_out_valid & ~pc_load & ~predict_take_branch;
 
   /* Generate the outputs */
   dff_rst_en_flush #(INSTR_LEN + 1 + XLEN + 1) instr_dff_rst_inst (
       .clk  (clk),
       .rst_n(rst_n),
-      .din  ({predicted_taken, instr_mem_rdata_valid, instr_mem_rdata, instr_mem_tag_in}),
+      .din  ({bht_predicted_taken, instr_mem_rdata_valid, instr_mem_rdata, instr_mem_tag_in}),
       .dout ({predicted_taken_out, instr_valid, instr, instr_tag}),
       .en   (~pipe_stall),
       .flush(pc_load)

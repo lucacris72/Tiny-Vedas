@@ -181,18 +181,23 @@ module dff_rst_en_vector #(
 endmodule
 
 /* ***** Program Counter ***** */
+/* ***** Program Counter (Modificato per Branch Prediction) ***** */
 module pc #(
     parameter int PC_WIDTH = 32,
     parameter logic [PC_WIDTH-1:0] INC_AMOUNT = 4
 ) (
-    input logic                clk,
-    input logic                rst_n,
-    input logic [PC_WIDTH-1:0] reset_vector,
+    input logic                  clk,
+    input logic                  rst_n,
+    input logic [PC_WIDTH-1:0]   reset_vector,
 
     /* Control Signals */
-    input logic load,
-    input logic inc,
-    input logic stall,
+    input logic                  load,
+    input logic                  inc,
+    input logic                  stall,
+    // ---> NUOVI INPUT PER PREDIZIONE <---
+    input logic                  predict_take_branch,
+    input logic [PC_WIDTH-1:0]   predict_target_pc_in,
+
 
     /* Data Signals */
     input  logic [PC_WIDTH-1:0] pc_in,
@@ -200,55 +205,57 @@ module pc #(
     output logic                pc_out_valid
 );
 
-  logic [PC_WIDTH-1:0] pc_d, pc_q;
-  logic update_pc;
-  dff_rst_en_vector #(PC_WIDTH) pc_dff (
-      .clk      (clk),
-      .rst_n    (rst_n),
-      .reset_val(reset_vector[PC_WIDTH-1:0]),
-      .en       (update_pc),
-      .din      (pc_d[PC_WIDTH-1:0]),
-      .dout     (pc_q[PC_WIDTH-1:0])
-  );
+    logic [PC_WIDTH-1:0] pc_d, pc_q;
+    logic update_pc;
 
-  logic [PC_WIDTH-1:0] last_pc;
+    dff_rst_en_vector #(PC_WIDTH) pc_dff (
+        .clk      (clk),
+        .rst_n    (rst_n),
+        .reset_val(reset_vector[PC_WIDTH-1:0]),
+        .en       (update_pc),
+        .din      (pc_d[PC_WIDTH-1:0]),
+        .dout     (pc_q[PC_WIDTH-1:0])
+    );
 
-  always_ff @(posedge clk) begin
-    if (!rst_n) begin
-      last_pc <= 'b0;
-    end else if (!stall) begin
-      last_pc <= pc_q;
+    logic [PC_WIDTH-1:0] last_pc;
+
+    always_ff @(posedge clk) begin
+        if (!rst_n) begin
+            last_pc <= 'b0;
+        end else if (!stall) begin
+            last_pc <= pc_q;
+        end
     end
-  end
 
+    // ---> LOGICA DI CONTROLLO DEL PC MODIFICATA <---
   always_comb begin
-    unique casez ({
-      load, inc, stall
-    })
-      3'b1?0: begin  // Load
-        update_pc = 1'b1;
-        pc_d = pc_in;
-        pc_out_valid = 1'b1;
-      end
-      3'b??1: begin  // Stall
-        update_pc = 1'b0;
-        pc_d = 'b0;
-        pc_out_valid = 1'b1;
-      end
-      3'b010: begin  // Inc
-        update_pc = 1'b1;
-        pc_d = pc_q + INC_AMOUNT;
-        pc_out_valid = 1'b1;
-      end
-      default: begin
-        pc_d = 'b0;
-        update_pc = 1'b0;
-        pc_out_valid = 1'b0;
-      end
-    endcase
-  end
+        pc_out_valid = 1'b1; // Valido in tutti i casi tranne il default
 
-  assign pc_out[PC_WIDTH-1:0] = (stall) ? last_pc[PC_WIDTH-1:0] : pc_q[PC_WIDTH-1:0];
+        // Priorità 1: Load (Flush)
+        if (load) begin
+            update_pc = 1'b1;
+            pc_d = pc_in;
+        // Priorità 2: Stall
+        end else if (stall) begin
+            update_pc = 1'b0;
+            pc_d = 'b0; // 'don't care'
+        // Priorità 3: Salto Speculativo
+        end else if (predict_take_branch) begin
+            update_pc = 1'b1;
+            pc_d = predict_target_pc_in;
+        // Priorità 4: Incremento (solo se 'inc' è attivo)
+        end else if (inc) begin
+            update_pc = 1'b1;
+            pc_d = pc_q + INC_AMOUNT;
+        // Default: non fare nulla
+        end else begin
+            update_pc = 1'b0;
+            pc_d = 'b0; // 'don't care'
+            pc_out_valid = 1'b0;
+        end
+    end
+
+    assign pc_out[PC_WIDTH-1:0] = (stall) ? last_pc[PC_WIDTH-1:0] : pc_q[PC_WIDTH-1:0];
 
 endmodule
 

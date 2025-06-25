@@ -84,7 +84,8 @@ module core_top #(
   /* EXU -> IFU Interface */
   logic                                 branch_feedback_is_branch;
   logic                                 branch_feedback_taken;
-  logic      [                    31:0] branch_feedback_pc;
+  logic      [                XLEN-1:0] branch_feedback_pc;
+  logic      [                XLEN-1:0] branch_feedback_target_pc;
 
   /* Data Memory */
   logic      [                XLEN-1:0] dccm_raddr;
@@ -162,6 +163,7 @@ module core_top #(
       .predicted_taken_out  (predicted_taken_from_ifu),
       .exu_is_branch        (branch_feedback_is_branch),
       .exu_branch_taken     (branch_feedback_taken),
+      .exu_target_pc        (branch_feedback_target_pc),
       .exu_branch_pc        (branch_feedback_pc)
   );
 
@@ -225,7 +227,8 @@ module core_top #(
       .pc_load        (pc_load),
       .exu_is_branch_out    (branch_feedback_is_branch),
       .exu_branch_taken_out (branch_feedback_taken),
-      .exu_branch_pc_out    (branch_feedback_pc)
+      .exu_branch_pc_out    (branch_feedback_pc),
+      .exu_target_pc_out    (branch_feedback_target_pc)
   );
 
   dccm #(

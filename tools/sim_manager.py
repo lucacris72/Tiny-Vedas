@@ -173,7 +173,7 @@ def compare_results(test: str) -> None:
     # Open the ISS log file
     with open(os.path.join("work", test, "iss.log"), "r") as f:
         iss_log = f.read()
-    # Open the XSim log file
+    # Open the RTL log file
     with open(os.path.join("work", test, "rtl.log"), "r") as f:
         rtl_log = f.read()
     iss_exe = []
@@ -219,7 +219,7 @@ def compare_results(test: str) -> None:
                 sim_log.write(f"ISS: {iss_exe[iss_idx]['instr']}\n")
                 sim_log.write(f"RTL: {rtl_exe[iss_idx]['instr']}\n")
                 test_passed = False
-            # Diffetent lenght of touch
+            # Different length of touch
             elif len(iss_exe[iss_idx]['touch']) != len(rtl_exe[iss_idx]['touch']):
                 sim_log.write(f"Error: Result mismatch at PC {iss_exe[iss_idx]['pc']} for instruction --> {iss_exe[iss_idx]['mnemonic']}\n")
                 sim_log.write(f"ISS: {iss_exe[iss_idx]['touch']}\n")
@@ -241,42 +241,66 @@ def compare_results(test: str) -> None:
         print(f"{test} {'.' * (50 - len(test))}. FAILED")
 
 def process_rtl_log(test: str):
-    """Process the RTL log file."""
-    with open(os.path.join("work", test, "rtl.log"), "r") as f:
-        rtl_log = f.read()
-    line_idx = 0
-    while line_idx < len(rtl_log.split("\n"))-2:
-        line = rtl_log.split("\n")[line_idx].split(";")
-        nxt_line = rtl_log.split("\n")[line_idx + 1].split(";")
-        if len(line) < 3 or len(nxt_line) < 3:
-            line_idx += 1
+    """Process the RTL log file to merge unaligned memory writes.
+    This version is more robust and handles non-memory-write log lines."""
+    try:
+        with open(os.path.join("work", test, "rtl.log"), "r") as f:
+            lines = f.read().splitlines()
+    except FileNotFoundError:
+        print(f"Warning: rtl.log not found for test {test}. Skipping log processing.")
+        return
+
+    new_log_lines = []
+    i = 0
+    while i < len(lines):
+        # Skip empty lines
+        if not lines[i]:
+            i += 1
             continue
-        if line[1] == nxt_line[1] and line[2] == nxt_line[2] and "Nothing":  # Merge them
-            effect = line[3]
-            nxt_effect = nxt_line[3]
-            # Get the memory address
-            mem_addr = effect.split("[")[1].split("]")[0]
-            alignment = int(mem_addr, 16) % 4
-            # For unaligned stores, we need to merge the two parts
-            # First part is the lower bytes (at higher address)
-            # Second part is the higher bytes (at lower address)
-            # For example, storing 0xCAFEBABE at 0xE:
-            # First store: mem[0xE]=0xBABE (lower 2 bytes)
-            # Second store: mem[0x10]=0xCAFE (higher 2 bytes)
-            # We need to merge them to get: mem[0xE]=0xCAFEBABE
-            lower_bytes = effect.split("=")[1].lstrip("0x")[8-alignment*2:]
-            higher_bytes = nxt_effect.split("=")[1].lstrip("0x")[:8-alignment*2]
-            # Combine them to get the full value
-            merged_value = higher_bytes + lower_bytes
-            # Remove nxt line from rtl_log
-            rtl_log = rtl_log.replace(rtl_log.split("\n")[line_idx + 1], "")
-            # Replace the line with the merged value
-            rtl_log = rtl_log.replace(rtl_log.split("\n")[line_idx], f"{line[0]};{line[1]};{line[2]};mem[{mem_addr}]=0x{merged_value}")
-            line_idx += 1
-        line_idx += 1
-    # Write the updated rtl_log
+
+        line_parts = lines[i].split(";")
+        action_taken = False
+
+        # Check if we can look ahead for a potential merge for unaligned stores
+        if i + 1 < len(lines):
+            next_line_parts = lines[i+1].split(";")
+            
+            # Conditions for a potential merge:
+            is_potential_merge = (
+                len(line_parts) >= 4 and len(next_line_parts) >= 4 and
+                line_parts[1] == next_line_parts[1] and
+                line_parts[2] == next_line_parts[2] and
+                "mem[" in line_parts[3] and "mem[" in next_line_parts[3]
+            )
+
+            if is_potential_merge:
+                try:
+                    effect = line_parts[3]
+                    nxt_effect = next_line_parts[3]
+                    
+                    mem_addr = effect.split("[")[1].split("]")[0]
+                    alignment = int(mem_addr, 16) % 4
+                    
+                    lower_bytes = effect.split("=")[1].lstrip("0x")[8 - alignment * 2:]
+                    higher_bytes = nxt_effect.split("=")[1].lstrip("0x")[:8 - alignment * 2]
+                    
+                    merged_value = higher_bytes + lower_bytes
+                    
+                    merged_line = f"{line_parts[0]};{line_parts[1]};{line_parts[2]};mem[{mem_addr}]=0x{merged_value.upper()}"
+                    new_log_lines.append(merged_line)
+                    
+                    i += 2
+                    action_taken = True
+                except (IndexError, ValueError):
+                    pass
+        
+        if not action_taken:
+            new_log_lines.append(lines[i])
+            i += 1
+
     with open(os.path.join("work", test, "rtl.log"), "w") as f:
-        f.write(rtl_log)
+        f.write("\n".join(new_log_lines) + "\n")
+
 
 def run_e2e(test: str, simulator: str):
     """Run a test through the entire pipeline."""
@@ -343,7 +367,6 @@ def main():
             test = future_to_test[future]
             try:
                 future.result()  # This will raise any exceptions that occurred
-                # Print a detailed tracebacki on exception
             except Exception as e:
                 print(f"Error running test {test}: {e}")
                 continue

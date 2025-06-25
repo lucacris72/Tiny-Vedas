@@ -17,3 +17,4 @@ $PROJ/rtl/lib/mem_lib.sv
 $PROJ/rtl/custom/perf_counter.sv
 $PROJ/rtl/exu/mac.sv
 $PROJ/rtl/ifu/bht.sv
+$PROJ/rtl/ifu/btb.sv
