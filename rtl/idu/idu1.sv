@@ -130,6 +130,7 @@ module idu1 #(
   assign idu1_out_i.word = idu0_out.word;
   assign idu1_out_i.mul = idu0_out.mul;
   assign idu1_out_i.mac = idu0_out.mac;
+  assign idu1_out_i.macrst = idu0_out.macrst;
   assign idu1_out_i.rs1_sign = idu0_out.rs1_sign;
   assign idu1_out_i.rs2_sign = idu0_out.rs2_sign;
   assign idu1_out_i.low = idu0_out.low;
@@ -162,6 +163,7 @@ module idu1 #(
         idu1_out_before_fwd.rd_addr,
         idu1_out_before_fwd.mul,
         idu1_out_before_fwd.mac,
+        idu1_out_before_fwd.macrst,
         idu1_out_before_fwd.alu,
         idu1_out_before_fwd.div,
         (idu1_out_before_fwd.load | idu1_out_before_fwd.store)
@@ -228,7 +230,7 @@ module idu1 #(
 
     // --- MAC cases --------------------------------------------------------
     // 5.a Se è in corso una MAC e la prossima NON è MAC → stall finché mac_busy
-    else if ( last_issued_instr.mac
+    else if ( (last_issued_instr.mac | last_issued_instr.macrst)
            & ~idu1_out_gated.mac
            &  idu1_out_gated.legal
            & ~idu1_out_gated.nop
