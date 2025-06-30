@@ -1,0 +1,3 @@
+[submodule "dependencies/riscv-isa-sim"]
+	path = dependencies/riscv-isa-sim
+	url = https://github.com/lucacris72/riscv-isa-sim
