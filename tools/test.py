@@ -31,6 +31,7 @@ PROJ = os.environ.get('PROJ', os.getcwd())
 os.environ['PROJ'] = PROJ
 
 
+
 def compile_test(asm_files, elf_path, riscv_gcc, isa, abi, link_script_path):
     link_script = (
 """
@@ -86,7 +87,7 @@ def run_spike_and_filter(elf_path, spike_cmd, isa, n, output_log):
     pc_re = re.compile(r"^core\s+0:\s+0x([0-9A-Fa-f]+)")
     regs = sorted(REG_MAP.items(), key=lambda x: -len(x[0]))
     # include --instructions to stop after n commits
-    cmd = spike_cmd + ['-l', f'--isa={isa}', f'--instructions={n}', elf_path]
+    cmd = spike_cmd + ['-l', f'--isa={isa}', f'--instructions={n + 10}', elf_path]
     print('Simulazione ISS:', ' '.join(cmd))
     sp = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)
     written = 0
@@ -98,7 +99,7 @@ def run_spike_and_filter(elf_path, spike_cmd, isa, n, output_log):
             pc = int(m.group(1), 16)
             if pc >= DRAM_BASE:
                 line = re.sub(r'^core\s+0:\s*', '', line)
-                orig_pc = pc - DRAM_BASE
+                orig_pc = pc - DRAM_BASE + 0x00100000  # adjust base
                 line = re.sub(r'^0x[0-9A-Fa-f]+', f"0x{orig_pc:08x}", line)
                 for name, num in regs:
                     line = re.sub(rf"\b{name}\b", f"x{num}", line)
@@ -143,15 +144,11 @@ def run_verilator(work_dir, test_name):
 def parse_iss_log(path):
     entries = {}
     with open(path) as f:
-        for idx, line in enumerate(f):
+        for line in f:
             parts = line.strip().split(')', 1)
-            if len(parts) < 2: continue
-            pc_str, rest = parts[0].split('(',1)
-            pc = int(pc_str.strip(), 16)
-            inst = rest.strip()
-            # parse register update after inst
-            # iss log shows full register state, skip value parse
-            entries[pc] = inst
+            if len(parts)<2: continue
+            pc_str,rest = parts[0].split('(',1)
+            entries[int(pc_str,16)] = rest.strip()
     return entries
 
 
@@ -159,34 +156,32 @@ def parse_rtl_log(path):
     entries = {}
     with open(path) as f:
         for line in f:
-            cols = line.strip().split(';')
-            if len(cols) < 4: continue
-            # cols: cycle; pc; inst; xN=val
-            pc = int(cols[1], 16) - 0x00100000  # adjust base
-            inst = cols[2]
-            reg_update = cols[3]
-            entries[pc] = (inst, reg_update)
+            cols=line.strip().split(';')
+            if len(cols)<3: continue
+            entries[int(cols[1],16)] = cols[2]
     return entries
 
 
-def compare_logs(iss_path, rtl_path):
+
+def compare_logs(iss_path, rtl_path, cmp_path=None):
+    # if no compare path provided, default to compare.log next to iss_path
+    if cmp_path is None:
+        cmp_path = os.path.join(os.path.dirname(iss_path), 'compare.log')
     iss = parse_iss_log(iss_path)
     rtl = parse_rtl_log(rtl_path)
-    print('Confronto ISS vs RTL:')
-    for pc in sorted(set(iss.keys()) & set(rtl.keys())):
-        iss_inst = iss[pc]
-        rtl_inst, rtl_reg = rtl[pc]
-        if iss_inst != rtl_inst:
-            print(f'PC 0x{pc:08x}: Instruction mismatch: ISS="{iss_inst}" RTL="{rtl_inst}"')
-        else:
-            print(f'PC 0x{pc:08x}: Instruction OK: {iss_inst}')
-        # optionally compare register write
-        # Could extend to compare specific regs
-    # find pcs missing
-    for pc in sorted(set(iss.keys()) - set(rtl.keys())):
-        print(f'PC 0x{pc:08x} in ISS only')
-    for pc in sorted(set(rtl.keys()) - set(iss.keys())):
-        print(f'PC 0x{pc:08x} in RTL only')
+    mismatches=[]
+    with open(cmp_path,'w') as rpt:
+        for pc in sorted(set(iss)&set(rtl)):
+            i=iss[pc]; r=rtl[pc]
+            line=f"0x{pc:08x}: ISS='{i}' RTL='{r}'"
+            rpt.write(line+"\n")
+            if i!=r: mismatches.append(pc)
+        only_iss=set(iss)-set(rtl)
+        only_rtl=set(rtl)-set(iss)
+        for pc in sorted(only_iss): rpt.write(f"0x{pc:08x} only ISS\n")
+        for pc in sorted(only_rtl): rpt.write(f"0x{pc:08x} only RTL\n")
+    return len(mismatches)==0
+
 
 
 def main():
@@ -200,6 +195,7 @@ def main():
     parser.add_argument('--isa', default='rv32im', help='ISA')
     parser.add_argument('--abi', default='ilp32', help='ABI')
     parser.add_argument('--rtl', action='store_true', help='Run Verilator RTL')
+    parser.add_argument('--compare', action='store_true', help='Compare iss.log and rtl.log')
     args = parser.parse_args()
     test_path = args.asm
     test = os.path.splitext(os.path.basename(test_path))[0]
@@ -221,6 +217,13 @@ def main():
     print(f'Istruzioni ISS: {n}')
     run_spike_and_filter(elf, [args.spike], args.isa, n, iss_log)
     if args.rtl: run_verilator(args.workdir, test)
+    if args.compare:
+        iss_log=os.path.join(PROJ,args.workdir,test,'iss.log')
+        rtl_log=os.path.join(PROJ,args.workdir,test,'rtl.log')
+        cmp_log=os.path.join(PROJ,args.workdir,test,'compare.log')
+        ok=compare_logs(iss_log,rtl_log,cmp_log)
+        status='PASSED' if ok else 'FAILED'
+        print(f"{test} ...... {status}")
 
 if __name__=='__main__':
     main()
