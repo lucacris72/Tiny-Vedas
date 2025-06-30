@@ -151,7 +151,7 @@ module mac (
   assign out_rd_wr_en  = s4_ctrl.mac & s4_ctrl.legal & ~s4_ctrl.nop;
   assign instr_tag_out = s4_instr_tag;
   assign instr_out     = s4_instr;
-  assign mac_busy      = |{s1_ctrl.mac, s2_ctrl.mac, s3_ctrl.mac, s4_ctrl.mac};
+  assign mac_busy      = |{s1_ctrl.mac, s2_ctrl.mac, s3_ctrl.mac};
 
   // --------------------------------------------------------------------------
   // Booth-to-partial helper function (SV-2005 compatible)
