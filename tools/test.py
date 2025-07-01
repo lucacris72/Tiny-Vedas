@@ -13,6 +13,7 @@ import traceback
 import re
 
 DRAM_BASE = 0x80000000
+LEGACY_BASE = 0x100000
 IMEM_DEPTH = 1024
 DMEM_DEPTH = 1024
 
@@ -21,18 +22,29 @@ def run_gen(test: str) -> None:
     os.makedirs(work_dir, exist_ok=True)
     test_path = test.split(".")
     extension = ".s" if test_path[0] == "asm" else ".c"
-    link_script_path = os.path.join(work_dir, "linker.ld")
-    link_script_content = "ENTRY(_start)\nSECTIONS {\n  . = 0x80000000;\n  .text : { *(.text) }\n  .rodata : { *(.rodata) }\n  .data : { *(.data) }\n  .bss : { *(.bss COMMON) }\n}"
-    with open(link_script_path, 'w') as f:
-        f.write(link_script_content)
     elf_output_path = os.path.join(work_dir, "test.elf")
     compile_log_path = os.path.join(work_dir, 'compile.log')
-    base_cmd = f"riscv64-unknown-elf-gcc -I{os.path.join('tests', test_path[0])} -march=rv32im -mabi=ilp32 -o {elf_output_path} -nostdlib -T {link_script_path}"
+    is_mac_test = len(test_path) > 1 and test_path[1].startswith("mac_")
     try:
-        if extension == ".s":
-            full_cmd = f"{base_cmd} {os.path.join('tests', test_path[0], test_path[1] + extension)}"
+        if is_mac_test:
+            print(f"Compiling '{test}' for Spike (address 0x{DRAM_BASE:x})")
+            link_script_path = os.path.join(work_dir, "linker.ld")
+            link_script_content = f"ENTRY(_start)\nSECTIONS {{\n  . = 0x{DRAM_BASE:x};\n  .text : {{ *(.text) }}\n  .rodata : {{ *(.rodata) }}\n  .data : {{ *(.data) }}\n  .bss : {{ *(.bss COMMON) }}\n}}"
+            with open(link_script_path, 'w') as f:
+                f.write(link_script_content)
+            base_cmd = f"riscv64-unknown-elf-gcc -I{os.path.join('tests', test_path[0])} -march=rv32im -mabi=ilp32 -o {elf_output_path} -nostdlib -T {link_script_path}"
+            if extension == ".s":
+                full_cmd = f"{base_cmd} {os.path.join('tests', test_path[0], test_path[1] + extension)}"
+            else:
+                full_cmd = f"{base_cmd} -fno-builtin-printf -fno-common -falign-functions=4 {os.path.join('tests', test_path[0], test_path[1] + extension)} {os.path.join('tests', test_path[0], 'asm_functions', 'printf.s')} {os.path.join('tests', test_path[0], 'asm_functions', 'eot_sequence.s')}"
         else:
-            full_cmd = f"{base_cmd} -fno-builtin-printf -fno-common -falign-functions=4 {os.path.join('tests', test_path[0], test_path[1] + extension)} {os.path.join('tests', test_path[0], 'asm_functions', 'printf.s')} {os.path.join('tests', test_path[0], 'asm_functions', 'eot_sequence.s')}"
+            print(f"Compiling '{test}' for standard ISS (address 0x{LEGACY_BASE:x})")
+            base_cmd = f"riscv64-unknown-elf-gcc -I{os.path.join('tests', test_path[0])} -march=rv32im -mabi=ilp32 -o {elf_output_path} -nostdlib"
+            linker_flag = f"-Wl,-Ttext=0x{LEGACY_BASE:x}"
+            if extension == ".s":
+                full_cmd = f"{base_cmd} {os.path.join('tests', test_path[0], test_path[1] + extension)} {linker_flag}"
+            else:
+                full_cmd = f"{base_cmd} -fno-builtin-printf -fno-common -falign-functions=4 {os.path.join('tests', test_path[0], test_path[1] + extension)} {os.path.join('tests', test_path[0], 'asm_functions', 'printf.s')} {os.path.join('tests', test_path[0], 'asm_functions', 'eot_sequence.s')} {linker_flag}"
         os.system(f"{full_cmd} > {compile_log_path} 2>&1")
     except Exception as e:
         print(f"Error compiling test {test}: {e}")
@@ -91,11 +103,11 @@ def run_spike_iss(test: str, objdump_cmd: str) -> None:
             reg_match = reg_write_re.search(rest_of_line)
             if reg_match:
                 reg_name, reg_val_hex = reg_match.groups()
-                touches.append(f"{reg_name}={int(reg_val_hex, 16):08x}") # <-- MODIFICA FINALE
+                touches.append(f"{reg_name}=0x{int(reg_val_hex, 16):08x}")
                 mnemonic = rest_of_line[:reg_match.start()].strip()
             touch_str = ";".join(touches)
-            log_line = f"{lines_written};{pc_str};{instr_hex};{mnemonic};{touch_str}\n" if touch_str else f"{lines_written};{pc_str};{instr_hex};{mnemonic}\n"
-            out_f.write(log_line)
+            log_line = f"0x{pc_str};0x{instr_hex};{mnemonic};{touch_str}"
+            out_f.write(log_line + "\n")
             lines_written += 1
     print(f"Spike ISS log generato. Righe scritte: {lines_written}.")
     if lines_written == 0 and "core" in spike_log_output:
@@ -126,6 +138,9 @@ def prepare_imem(test: str) -> None:
     imem_path = os.path.join("work", test, "imem.hex")
     dmem_path = os.path.join("work", test, "dmem.hex")
     elf_path = os.path.join("work", test, "test.elf")
+    test_path = test.split('.')
+    is_mac_test = len(test_path) > 1 and test_path[1].startswith("mac_")
+    base_addr = DRAM_BASE if is_mac_test else LEGACY_BASE
     with open(elf_path, 'rb') as f:
         elf = ELFFile(f)
         text_section = elf.get_section_by_name('.text')
@@ -141,7 +156,7 @@ def prepare_imem(test: str) -> None:
         if rodata_section:
             rodata_new = []
             rodata_address = rodata_section.header['sh_addr']
-            rodata_base_address = rodata_address - DRAM_BASE
+            rodata_base_address = rodata_address - base_addr
             rodata_data = rodata_section.data()
             if len(rodata_data) > DMEM_DEPTH:
                 rodata_data = rodata_data[:DMEM_DEPTH]
@@ -172,6 +187,9 @@ def read_task_list(filename: str) -> List[str]:
 
 def run_verilator(test: str) -> None:
     work_dir = os.path.join("work", test)
+    test_path = test.split('.')
+    is_mac_test = len(test_path) > 1 and test_path[1].startswith("mac_")
+    reset_vector = DRAM_BASE if is_mac_test else LEGACY_BASE
     imem_path = os.path.join(work_dir, "imem.hex")
     imem_abs_path = os.path.abspath(imem_path)
     verilator_cmd = (
@@ -181,7 +199,7 @@ def run_verilator(test: str) -> None:
         f"--top-module core_top_tb --exe $PROJ/dv/verilator/core_top_tb.cpp "
         f"-f $PROJ/rtl/core_top.flist "
         f"-DICCM_INIT_FILE='\"{imem_abs_path}\"' "
-        f"-DRESET_VECTOR=32\\'h{DRAM_BASE:x} -DSTACK_POINTER_INIT_VALUE=32\\'h80000000"
+        f"-DRESET_VECTOR=32\\'h{reset_vector:x} -DSTACK_POINTER_INIT_VALUE=32\\'h80000000"
     )
     dmem_path = os.path.join(work_dir, "dmem.hex")
     if os.path.exists(dmem_path):
@@ -200,14 +218,18 @@ def run_verilator(test: str) -> None:
             print(f"Error: Verilator returned exit code {exit_code}")
 
 def run_xsim(test: str) -> None:
-    has_dmem = os.path.exists(os.path.join("work", test, "dmem.hex"))
-    xsim_cmd = f"export PROJ=$(pwd) && cd {os.path.join('work', test)} && xvlog -sv -f $PROJ/rtl/core_top.flist --define ICCM_INIT_FILE='\"imem.hex\"' --define RESET_VECTOR=32\\'h{DRAM_BASE:x} --define STACK_POINTER_INIT_VALUE=32\\'h80000000"
+    work_dir = os.path.join("work", test)
+    test_path = test.split('.')
+    is_mac_test = len(test_path) > 1 and test_path[1].startswith("mac_")
+    reset_vector = DRAM_BASE if is_mac_test else LEGACY_BASE
+    has_dmem = os.path.exists(os.path.join(work_dir, "dmem.hex"))
+    xsim_cmd = f"export PROJ=$(pwd) && cd {work_dir} && xvlog -sv -f $PROJ/rtl/core_top.flist --define ICCM_INIT_FILE='\"imem.hex\"' --define RESET_VECTOR=32\\'h{reset_vector:x} --define STACK_POINTER_INIT_VALUE=32\\'h80000000"
     if has_dmem:
         xsim_cmd += f" --define DCCM_INIT_FILE='\"dmem.hex\"'"
     else:
         xsim_cmd += f" --define DCCM_INIT_FILE='\"\"'"
     xsim_cmd += f" && xelab -top core_top_tb -snapshot sim --debug wave && xsim sim --runall"
-    sim_log_path = os.path.join('work', test, 'sim.log')
+    sim_log_path = os.path.join(work_dir, 'sim.log')
     with open(sim_log_path, 'w') as sim_log:
         process = subprocess.Popen(xsim_cmd, shell=True, stdout=sim_log, stderr=subprocess.STDOUT)
         process.wait()
@@ -227,19 +249,21 @@ def compare_results(test: str) -> None:
         return
     iss_events, rtl_events = [], []
     for line in iss_log_lines:
-        if not line.strip(): continue
+        if not line.strip() or ";" not in line: continue
         parts = line.split(';')
-        if len(parts) >= 5 and parts[4]:
-            pc = parts[1].replace("0x", "")
-            modification = parts[4]
-            iss_events.append((pc.upper(), modification.upper()))
+        if len(parts) >= 4:
+            pc = parts[0].replace("0x", "").upper()
+            instr = parts[1].replace("0x", "").upper()
+            modification = parts[3].upper()
+            iss_events.append((pc, instr, modification))
     for line in rtl_log_lines:
-        if not line.strip(): continue
+        if not line.strip() or ";" not in line: continue
         parts = line.split(';')
-        if len(parts) >= 2 and parts[1]:
-            pc = parts[0].replace("0x", "")
-            modification = parts[1]
-            rtl_events.append((pc.upper(), modification.upper()))
+        if len(parts) >= 4:
+            pc = parts[1].replace("0x", "").upper()
+            instr = parts[2].replace("0x", "").upper()
+            modification = parts[3].upper()
+            rtl_events.append((pc, instr, modification))
     test_passed = (iss_events == rtl_events)
     if test_passed:
         print(f"{test} {'.' * (50 - len(test))}. PASSED")
@@ -252,12 +276,12 @@ def compare_results(test: str) -> None:
             sim_log.write(f"RTL generated {len(rtl_events)} events.\n")
             max_len = max(len(iss_events), len(rtl_events))
             for i in range(max_len):
-                iss_event = iss_events[i] if i < len(iss_events) else ("MISSING", "MISSING")
-                rtl_event = rtl_events[i] if i < len(rtl_events) else ("MISSING", "MISSING")
+                iss_event = iss_events[i] if i < len(iss_events) else ("ISS_MISSING",)*3
+                rtl_event = rtl_events[i] if i < len(rtl_events) else ("RTL_MISSING",)*3
                 if iss_event != rtl_event:
                     sim_log.write(f"First mismatch at index {i}:\n")
-                    sim_log.write(f"  - ISS event: PC={iss_event[0]}, MOD={iss_event[1]}\n")
-                    sim_log.write(f"  - RTL event: PC={rtl_event[0]}, MOD={rtl_event[1]}\n")
+                    sim_log.write(f"  - ISS event: PC={iss_event[0]}, INSTR={iss_event[1]}, MOD={iss_event[2]}\n")
+                    sim_log.write(f"  - RTL event: PC={rtl_event[0]}, INSTR={rtl_event[1]}, MOD={rtl_event[2]}\n")
                     break
 
 def process_rtl_log(test: str):

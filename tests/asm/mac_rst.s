@@ -20,6 +20,12 @@ _start:
 
     .word   0x00B5060B
 
+    .word   0x0000100B
+
+    .word   0x00B5060B
+
+    .word   0x00B5060B
+
     mv      x18, x12
 
    .include "./eot_sequence.s"

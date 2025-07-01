@@ -9,7 +9,7 @@ _start:
     li   x10, 2
     li   x11, 5
     .word 0x00B5060B    # mac x12, x10, x11  ⇒ 2*5 + 21 = 31
-    mv   x14, x12       # salva in x14
+    mv   x18, x12       # salva in x14
 
     # ecall per uscire, con a0=x13(21), a1=x14(31)
     mv   a0, x13

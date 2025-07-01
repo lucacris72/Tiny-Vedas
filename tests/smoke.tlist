@@ -16,4 +16,5 @@ asm.basic_bne
 asm.basic_blt
 asm.basic_bge
 asm.bht_test
+asm.mac_simple
 c.helloworld

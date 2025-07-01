@@ -106,8 +106,8 @@ module core_top_tb;
   always_ff @(posedge clk) begin
     /* Log everytime we touch the state of our core: Write to the register file, change the PC and store to memory */
     if (core_top_i.exu_wb_rd_wr_en & ~core_top_i.ifu_inst.pc_load) begin  /* Hierarchical naming */
-      $fdisplay(fd, "%08h;x%0d=%08h", core_top_i.exu_instr_tag_out,
-                 core_top_i.exu_wb_rd_addr, core_top_i.exu_wb_data);
+      $fdisplay(fd, "%5d;0x%H;0x%H;x%0D=0x%H", cycle_count, core_top_i.exu_instr_tag_out,
+                core_top_i.exu_instr_out, core_top_i.exu_wb_rd_addr, core_top_i.exu_wb_data);
     end
     if (finish_seq_detected) begin
       $fdisplay(fd, "Simulation finished successfully at cycle %0d", cycle_count);
