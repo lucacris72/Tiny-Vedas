@@ -20,7 +20,7 @@ _start:
 
     .word   0x00B5060B
 
-    .word   0x0000100B
+    .word   0x0000108B # Use a register different from x0 in order to be logged in spike
 
     .word   0x00B5060B
 
