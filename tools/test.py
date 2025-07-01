@@ -12,10 +12,18 @@ import multiprocessing
 import traceback
 import re
 
+# --- IMPOSTAZIONI GLOBALI ---
 DRAM_BASE = 0x80000000
 LEGACY_BASE = 0x100000
 IMEM_DEPTH = 1024
 DMEM_DEPTH = 1024
+VERBOSE = False # Variabile globale per la modalità debug
+
+# --- FUNZIONE DI STAMPA VERBOSA ---
+def vprint(*args, **kwargs):
+    """Stampa solo se la modalità VERBOSE è attiva."""
+    if VERBOSE:
+        print(*args, **kwargs)
 
 def run_gen(test: str) -> None:
     work_dir = os.path.join("work", test)
@@ -27,7 +35,7 @@ def run_gen(test: str) -> None:
     is_mac_test = len(test_path) > 1 and test_path[1].startswith("mac_")
     try:
         if is_mac_test:
-            print(f"Compiling '{test}' for Spike (address 0x{DRAM_BASE:x})")
+            vprint(f"Compiling '{test}' for Spike (address 0x{DRAM_BASE:x})")
             link_script_path = os.path.join(work_dir, "linker.ld")
             link_script_content = f"ENTRY(_start)\nSECTIONS {{\n  . = 0x{DRAM_BASE:x};\n  .text : {{ *(.text) }}\n  .rodata : {{ *(.rodata) }}\n  .data : {{ *(.data) }}\n  .bss : {{ *(.bss COMMON) }}\n}}"
             with open(link_script_path, 'w') as f:
@@ -38,7 +46,7 @@ def run_gen(test: str) -> None:
             else:
                 full_cmd = f"{base_cmd} -fno-builtin-printf -fno-common -falign-functions=4 {os.path.join('tests', test_path[0], test_path[1] + extension)} {os.path.join('tests', test_path[0], 'asm_functions', 'printf.s')} {os.path.join('tests', test_path[0], 'asm_functions', 'eot_sequence.s')}"
         else:
-            print(f"Compiling '{test}' for standard ISS (address 0x{LEGACY_BASE:x})")
+            vprint(f"Compiling '{test}' for standard ISS (address 0x{LEGACY_BASE:x})")
             base_cmd = f"riscv64-unknown-elf-gcc -I{os.path.join('tests', test_path[0])} -march=rv32im -mabi=ilp32 -o {elf_output_path} -nostdlib"
             linker_flag = f"-Wl,-Ttext=0x{LEGACY_BASE:x}"
             if extension == ".s":
@@ -65,11 +73,11 @@ def count_static_instructions(elf_path: str, objdump_cmd: str) -> int:
                 instr_count += 1
         return instr_count if instr_count > 0 else 500
     except Exception as e:
-        print(f"ATTENZIONE: Impossibile contare le istruzioni con objdump: {e}")
+        vprint(f"ATTENZIONE: Impossibile contare le istruzioni con objdump: {e}")
         return 500
 
 def run_spike_iss(test: str, objdump_cmd: str) -> None:
-    print(f"Running Spike ISS for MAC test: {test}")
+    vprint(f"Running Spike ISS for MAC test: {test}")
     elf_path = os.path.join("work", test, "test.elf")
     log_path = os.path.join("work", test, "iss.log")
     if not os.path.exists(elf_path):
@@ -77,9 +85,9 @@ def run_spike_iss(test: str, objdump_cmd: str) -> None:
         sys.exit(1)
     instruction_count = count_static_instructions(elf_path, objdump_cmd)
     simulation_cycles = instruction_count + 50
-    print(f"Istruzioni statiche contate: {instruction_count}. Avvio Spike per {simulation_cycles} cicli.")
+    vprint(f"Istruzioni statiche contate: {instruction_count}. Avvio Spike per {simulation_cycles} cicli.")
     cmd = ['spike', '--log-commits', f'--instructions={simulation_cycles}', f'--isa=rv32im', elf_path]
-    print(f"Esecuzione comando: {' '.join(cmd)}")
+    vprint(f"Esecuzione comando: {' '.join(cmd)}")
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', check=False)
     except FileNotFoundError:
@@ -109,7 +117,7 @@ def run_spike_iss(test: str, objdump_cmd: str) -> None:
             log_line = f"0x{pc_str};0x{instr_hex};{mnemonic};{touch_str}"
             out_f.write(log_line + "\n")
             lines_written += 1
-    print(f"Spike ISS log generato. Righe scritte: {lines_written}.")
+    vprint(f"Spike ISS log generato. Righe scritte: {lines_written}.")
     if lines_written == 0 and "core" in spike_log_output:
         print("\n--- ATTENZIONE: il file iss.log è vuoto! ---")
         raise Exception("Generazione di iss.log fallita, il log è vuoto.")
@@ -119,7 +127,7 @@ def run_iss(test: str, objdump_cmd: str) -> None:
     if len(test_parts) > 1 and test_parts[1].startswith("mac_"):
         run_spike_iss(test, objdump_cmd)
         return
-    print(f"Running standard ISS for test: {test}")
+    vprint(f"Running standard ISS for test: {test}")
     elf_path = os.path.join("work", test, "test.elf")
     dmem_path = os.path.join("tests", test_parts[0], test_parts[1] + ".mem")
     has_dmem = os.path.exists(dmem_path)
@@ -215,7 +223,7 @@ def run_verilator(test: str) -> None:
         process.wait()
         exit_code = process.returncode
         if exit_code != 0:
-            print(f"Error: Verilator returned exit code {exit_code}")
+            vprint(f"Error: Verilator returned exit code {exit_code}")
 
 def run_xsim(test: str) -> None:
     work_dir = os.path.join("work", test)
@@ -235,7 +243,7 @@ def run_xsim(test: str) -> None:
         process.wait()
         exit_code = process.returncode
         if exit_code != 0:
-            print(f"Error: XSim returned exit code {exit_code}")
+            vprint(f"Error: XSim returned exit code {exit_code}")
 
 def compare_results(test: str) -> None:
     try:
@@ -251,7 +259,7 @@ def compare_results(test: str) -> None:
     for line in iss_log_lines:
         if not line.strip() or ";" not in line: continue
         parts = line.split(';')
-        if len(parts) >= 4:
+        if len(parts) >= 4 and parts[3].strip():
             pc = parts[0].replace("0x", "").upper()
             instr = parts[1].replace("0x", "").upper()
             modification = parts[3].upper()
@@ -259,7 +267,7 @@ def compare_results(test: str) -> None:
     for line in rtl_log_lines:
         if not line.strip() or ";" not in line: continue
         parts = line.split(';')
-        if len(parts) >= 4:
+        if len(parts) >= 4 and parts[3].strip():
             pc = parts[1].replace("0x", "").upper()
             instr = parts[2].replace("0x", "").upper()
             modification = parts[3].upper()
@@ -269,20 +277,21 @@ def compare_results(test: str) -> None:
         print(f"{test} {'.' * (50 - len(test))}. PASSED")
     else:
         print(f"{test} {'.' * (50 - len(test))}. FAILED")
-        sim_log_path = os.path.join('work', test, 'sim.log')
-        with open(sim_log_path, 'a') as sim_log:
-            sim_log.write("\n--- LOG MISMATCH DETAILS ---\n")
-            sim_log.write(f"ISS generated {len(iss_events)} events.\n")
-            sim_log.write(f"RTL generated {len(rtl_events)} events.\n")
-            max_len = max(len(iss_events), len(rtl_events))
-            for i in range(max_len):
-                iss_event = iss_events[i] if i < len(iss_events) else ("ISS_MISSING",)*3
-                rtl_event = rtl_events[i] if i < len(rtl_events) else ("RTL_MISSING",)*3
-                if iss_event != rtl_event:
-                    sim_log.write(f"First mismatch at index {i}:\n")
-                    sim_log.write(f"  - ISS event: PC={iss_event[0]}, INSTR={iss_event[1]}, MOD={iss_event[2]}\n")
-                    sim_log.write(f"  - RTL event: PC={rtl_event[0]}, INSTR={rtl_event[1]}, MOD={rtl_event[2]}\n")
-                    break
+        if VERBOSE:
+            sim_log_path = os.path.join('work', test, 'sim.log')
+            with open(sim_log_path, 'a') as sim_log:
+                sim_log.write("\n--- LOG MISMATCH DETAILS ---\n")
+                sim_log.write(f"ISS generated {len(iss_events)} events.\n")
+                sim_log.write(f"RTL generated {len(rtl_events)} events.\n")
+                max_len = max(len(iss_events), len(rtl_events))
+                for i in range(max_len):
+                    iss_event = iss_events[i] if i < len(iss_events) else ("ISS_MISSING",)*3
+                    rtl_event = rtl_events[i] if i < len(rtl_events) else ("RTL_MISSING",)*3
+                    if iss_event != rtl_event:
+                        sim_log.write(f"First mismatch at index {i}:\n")
+                        sim_log.write(f"  - ISS event: PC={iss_event[0]}, INSTR={iss_event[1]}, MOD={iss_event[2]}\n")
+                        sim_log.write(f"  - RTL event: PC={rtl_event[0]}, INSTR={rtl_event[1]}, MOD={rtl_event[2]}\n")
+                        break
 
 def process_rtl_log(test: str):
     rtl_log_path = os.path.join("work", test, "rtl.log")
@@ -290,7 +299,7 @@ def process_rtl_log(test: str):
         with open(rtl_log_path, "r") as f:
             lines = f.read().splitlines()
     except FileNotFoundError:
-        print(f"Warning: rtl.log not found for test {test}. Skipping log processing.")
+        vprint(f"Warning: rtl.log not found for test {test}. Skipping log processing.")
         return
     test_parts = test.split('.')
     if len(test_parts) > 1 and test_parts[1].startswith("mac_"):
@@ -298,7 +307,7 @@ def process_rtl_log(test: str):
         original_line_count = len(lines)
         lines = [line for line in lines if termination_signature not in line]
         if len(lines) < original_line_count:
-            print(f"Rilevato test MAC: rimozione della riga di terminazione contenente '{termination_signature}' da rtl.log")
+            vprint(f"Rilevato test MAC: rimozione della riga di terminazione contenente '{termination_signature}' da rtl.log")
     new_log_lines, i = [], 0
     while i < len(lines):
         if not lines[i]: i += 1; continue
@@ -335,7 +344,8 @@ def run_e2e(test: str, simulator: str, objdump_cmd: str):
         compare_results(test)
     except Exception as e:
         print(f"Error running test {test}: {e}")
-        print(traceback.format_exc())
+        if VERBOSE:
+            print(traceback.format_exc())
         raise e
 
 def main():
@@ -345,7 +355,13 @@ def main():
     group.add_argument("-n", "--test-name", help="Name of the test to run")
     parser.add_argument("-s", "--simulator", required=True, choices=["verilator", "xsim"], help="Simulator to use")
     parser.add_argument("--objdump", default="riscv64-unknown-elf-objdump", help="Path to riscv objdump")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable verbose/debug printing")
     args = parser.parse_args()
+    
+    global VERBOSE
+    if args.debug:
+        VERBOSE = True
+
     os.makedirs("work", exist_ok=True)
     tests = read_task_list(args.task_list) if args.task_list else [args.test_name]
     if not tests:
@@ -359,7 +375,7 @@ def main():
             try:
                 future.result()
             except Exception as e:
-                print(f"Error in thread for test {test}: {e}")
+                vprint(f"Error in thread for test {test}: {e}")
 
 if __name__ == "__main__":
     try:
