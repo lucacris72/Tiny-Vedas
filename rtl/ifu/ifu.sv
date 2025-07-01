@@ -65,9 +65,9 @@ module ifu (
   logic [XLEN-1:0] btb_target_pc;
   logic            predict_take_branch;
 
-  assign instr_mem_addr = pc_out[INSTR_MEM_ADDR_WIDTH-1:0];  /* Crop the PC since the instr_mem_addr
+  assign instr_mem_addr = (predict_take_branch) ? btb_target_pc[INSTR_MEM_ADDR_WIDTH-1:0] : pc_out[INSTR_MEM_ADDR_WIDTH-1:0];  /* Crop the PC since the instr_mem_addr
                                                                 is narrower than the PC */
-  assign instr_mem_tag_out = pc_out;
+  assign instr_mem_tag_out = (predict_take_branch) ? btb_target_pc : pc_out;
 
   bht #( .BHT_ENTRIES(1024) ) i_bht (
       .clk                (clk),
@@ -107,7 +107,7 @@ module ifu (
       .predict_target_pc_in (btb_target_pc)
   );
 
-  assign instr_mem_addr_valid = pc_out_valid & ~pc_load & ~predict_take_branch;
+  assign instr_mem_addr_valid = pc_out_valid & ~pc_load;
 
   /* Generate the outputs */
   dff_rst_en_flush #(INSTR_LEN + 1 + XLEN + 1) instr_dff_rst_inst (

@@ -242,7 +242,7 @@ module pc #(
         // Priorità 3: Salto Speculativo
         end else if (predict_take_branch) begin
             update_pc = 1'b1;
-            pc_d = predict_target_pc_in;
+            pc_d = predict_target_pc_in + 4;
         // Priorità 4: Incremento (solo se 'inc' è attivo)
         end else if (inc) begin
             update_pc = 1'b1;
