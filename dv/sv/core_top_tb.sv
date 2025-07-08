@@ -38,6 +38,8 @@ module core_top_tb;
   logic [XLEN-1:0] reset_vector = `RESET_VECTOR;
 
   logic [    31:0] cycle_count = 0;
+  integer            branch_count = 0;
+  integer            mispredict_count = 0;
 
   int              fd;
   int              fd_console;
@@ -72,24 +74,37 @@ module core_top_tb;
     end
   end
 
-  /* Console output */
-  always_ff @(posedge clk) begin
-    if (core_top_i.dccm_wen & core_top_i.dccm_waddr == 32'h00200000) begin
-      $fwrite(fd_console, "%c", core_top_i.dccm_wdata[7:0]);
-    end
-  end
-
-
   logic [31:0] cycle_count_last_retired;
-  always_ff @(posedge clk) begin
-    if (finish_seq_detected) begin
-      $finish;
+    always_ff @(posedge clk) begin
+        if (finish_seq_detected) begin
+            // ---> STAMPA IL RIEPILOGO FINALE CON TUTTE LE STATISTICHE <---
+            $fdisplay(fd, "\n=============================================");
+            $fdisplay(fd, "======         SIMULATION REPORT         ======");
+            $fdisplay(fd, "=============================================");
+            $fdisplay(fd, "Simulation finished successfully at cycle %0d", cycle_count);
+            $fdisplay(fd, "\n--- Core Performance ---");
+            $fdisplay(fd, "Total Cycles (MCYCLE)   : %0d", core_top_i.pmu_inst.mcycle_q);
+            $fdisplay(fd, "Retired Instructions      : %0d", core_top_i.pmu_inst.minstret_q);
+            if (core_top_i.pmu_inst.mcycle_q > 0) begin
+                real ipc = (real'(core_top_i.pmu_inst.minstret_q) / real'(core_top_i.pmu_inst.mcycle_q));
+                $fdisplay(fd, "IPC (Instructions/Cycle): %.3f", ipc);
+            end
+
+            $fdisplay(fd, "\n--- Branch Predictor Statistics ---");
+            $fdisplay(fd, "Total Conditional Branches: %0d", branch_count);
+            $fdisplay(fd, "Total Mispredictions      : %0d", mispredict_count);
+            if (branch_count > 0) begin
+                real misprediction_rate = (real'(mispredict_count) / real'(branch_count)) * 100.0;
+                $fdisplay(fd, "Misprediction Rate        : %.2f %%", misprediction_rate);
+            end
+            $fdisplay(fd, "=============================================");
+            $finish;
+        end
+        if (cycle_count_last_retired > 1e10) begin
+            $fdisplay(fd, "Nothing retired in 1e10 cycles... Aborting");
+            $finish;
+        end
     end
-    if (cycle_count_last_retired > 1000) begin
-      $fdisplay(fd, "Nothing retired in 1000 cycles... Aborting");
-      $finish;
-    end
-  end
 
   /* Cycle counter */
   always_ff @(posedge clk) begin
@@ -101,6 +116,22 @@ module core_top_tb;
       cycle_count_last_retired <= 'b0;
     end
   end
+
+  always_ff @(posedge clk) begin
+        if (rst_n) begin
+            // Contiamo un branch ogni volta che l'ALU ne risolve uno.
+            // Usiamo il segnale che esce dall'EXU per essere sicuri che sia valido.
+            if (core_top_tb.core_top_i.exu_inst.exu_is_branch_out) begin
+                branch_count <= branch_count + 1;
+            end
+
+            // Contiamo una misprediction ogni volta che il segnale relativo si alza.
+            // Usiamo il segnale interno all'ALU per la massima precisione.
+            if (core_top_i.exu_inst.alu_inst.mispredict) begin
+                mispredict_count <= mispredict_count + 1;
+            end
+        end
+    end
 
   /* Use the monitor to log the log file */
   always_ff @(posedge clk) begin
