@@ -92,7 +92,7 @@ tiny-vedas/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/lucacris72/Tiny-Vedas
+   git clone --recurse-submodules https://github.com/lucacris72/Tiny-Vedas
    cd Tiny-Vedas
    ```
 
