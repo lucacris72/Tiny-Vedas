@@ -92,7 +92,7 @@ tiny-vedas/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/siliscale/Tiny-Vedas.git
+   git clone https://github.com/lucacris72/Tiny-Vedas
    cd Tiny-Vedas
    ```
 
