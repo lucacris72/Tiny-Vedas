@@ -79,7 +79,6 @@ module alu (
     logic eq, ne, lt, ge;
 
 
-    /* For JAL/JALR operation, we reuse the same datapath for reg file update */
     assign a = (alu_ctrl.jal | (alu_ctrl.pc & alu_ctrl.add)) ? alu_ctrl.instr_tag : alu_ctrl.rs1_data;
 
     assign b = ({XLEN{alu_ctrl.imm_valid}} & alu_ctrl.imm) |
@@ -97,7 +96,7 @@ module alu (
     assign ge = ~lt;
 
 
-    // --- Branch Logic (Definitive, Structurally Robust Version) ---
+    // --- Branch Logic ---
     
     // 1. Calculate actual outcome of the branch
     assign brn_taken = (alu_ctrl.beq & eq) | (alu_ctrl.bne & ne) | (alu_ctrl.bge & ge) | (alu_ctrl.blt & lt);
@@ -135,7 +134,7 @@ module alu (
     assign exu_branch_pc_out    = alu_ctrl.instr_tag;
 
 
-    // --- Rest of ALU Logic (Unchanged) ---
+    // --- Rest of ALU Logic ---
     assign logic_sel[3] = alu_ctrl.land | alu_ctrl.lor;
     assign logic_sel[2] = alu_ctrl.lor | alu_ctrl.lxor;
     assign logic_sel[1] = alu_ctrl.lor | alu_ctrl.lxor;

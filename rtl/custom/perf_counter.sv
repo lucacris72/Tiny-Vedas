@@ -1,3 +1,34 @@
+/*
+ * Copyright (c) 2025 Luca Donato
+ *
+ * This file is part of a custom RISC-V core extension developed for a
+ * project at Politecnico di Milano. It builds upon a base core
+ * provided by Siliscale, licensed under the MIT License.
+ *
+ * --------------------------------------------------------------------------------
+ *
+ * MIT License
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
+
 // rtl/pmu/perf_counter.sv
 `ifndef GLOBAL_SVH
 `include "global.svh"
@@ -10,10 +41,9 @@ module perf_counter #(
     input  logic                  rst_n,
 
     // Pulsi di incremento (1‑cycle high)
-    input  logic                  incr_cycle,   // di solito 1'b1
+    input  logic                  incr_cycle,
     input  logic                  incr_instr,   // exu_wb_rd_wr_en && ~pipe_flush
 
-    // Interfaccia CSR (opzionale – vedi §4)
     input  logic                  csr_we,
     input  logic [11:0]           csr_addr,
     input  logic [CNT_WIDTH-1:0]  csr_wdata,

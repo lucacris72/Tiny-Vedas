@@ -1,67 +1,126 @@
-# Introduction 
+# Tiny Vedas - RISC-V RV32IM Processor
 
-This is the main repository for the free [RISC-V Processor Design Course](https://www.youtube.com/playlist?list=PLRDeZtyULZWgMGOpZxxIhsRzCFyqhQ_U8) available on Youtube.
+A complete, open-source implementation of a RISC-V RV32IM processor written in SystemVerilog. Tiny Vedas is a 4-stage pipelined processor with full RV32IM instruction set support, hazard handling, and comprehensive verification.
+This project includes extensions developed as part of the Advanced Computer Architecture course at Politecnico di Milano.
 
-Here, you will find all the slides, notes, and code for the course.
+## Features
 
-The goal of this course is to design a RISC-V RV32IM processor from scratch, that we'll call Tiny Vedas, to run [Dhrystone](https://github.com/sifive/benchmark-dhrystone) and implement the core on both FPGA and ASIC (we won't have an actual chip at the end, but we'll go throught the motions of building one).
+### Architecture
+- **ISA**: RISC-V RV32IM (32-bit integer + multiply/divide)
+- **Pipeline**: 4-stage pipeline (IFU → IDU0 → IDU1 → EXU)
+- **Data Width**: 32-bit (XLEN = 32)
+- **Memory**: Harvard architecture with separate instruction and data memories
+- **Reset Vector**: Configurable (default: 0x80000000)
 
-All free lectures are now completed ✅
+### Instruction Set Support
+- **Arithmetic**: ADD, SUB, ADDI, LUI, AUIPC
+- **Logical**: AND, OR, XOR, ANDI, ORI, XORI
+- **Shifts**: SLL, SRL, SRA, SLLI, SRLI, SRAI
+- **Comparison**: SLT, SLTU, SLTI, SLTIU
+- **Branches**: BEQ, BNE, BLT, BGE, BLTU, BGEU
+- **Jumps**: JAL, JALR
+- **Memory**: LB, LH, LW, LBU, LHU, SB, SH, SW
+- **Multiply/Divide**: MUL, MULH, MULHU, MULHSU, DIV, DIVU, REM, REMU
+- **Multiply and Accumulate**: MAC, MACRST
 
-## Course Outline
+### Advanced Features
+- **Data Hazard Resolution**: Register forwarding from EXU to IDU1
+- **Control Hazard Handling**: Pipeline flush on branches
+- **Branch Prediction**: 2-bit saturating BHT
+- **Multi-cycle Operations**: Pipelined multiplier, mac, and divider
+- **Unaligned Memory Access**: Support for byte and half-word aligned loads/stores
+- **Memory Forwarding**: Store-to-load forwarding for performance
 
-The course is divided into main + bonus lectures.
+## Project Structure
 
-**Main Lectures**
-- [Lecture 1 - Intro & Setting up the Dev Environment](docs/lecture_1/slides.pdf)
-- [Lecture 2 - Combinatorial Logic & Arithmetic and Logic Unit](docs/lecture_2/slides.pdf)
-- [Lecture 3 - Multiplexers & Sequential Logic](docs/lecture_3/slides.pdf)
-- [Lecture 4 - RISC-V RV32IM ISA, Tiny Vedas Architecture, and the IFU](docs/lecture_4/slides.pdf)
-- [Lecture 5 - Design Top Level, Top Level Testbench, Instruction Decode](docs/lecture_5/slides.pdf)
-- [Lecture 6 - EXU, Toolchain and Co-Simulation](docs/lecture_6/slides.pdf)
-- [Lecture 7 - Data Hazards, Lane forwarding](docs/lecture_7/slides.pdf)
-- [Lecture 8 - Pipeline Stalls, Multiplier and Divider](docs/lecture_8/slides.pdf)
-- [Lecture 9 - Aligned and Unaligned memory access, Load/Store Unit](docs/lecture_9/slides.pdf)
-- [Lecture 10 - Handling Branches, Control Hazards and Pipeline Flushes](docs/lecture_10/slides.pdf)
-
-**Bonus Lectures**
-- Lecture B1 - Compiling C programs and run them on Tiny Vedas
-- Lecture B2 - Implementing standard C functions, Running Dhrystone
-- Lecture B3 - Deploying Tiny Vedas to Arty Z7-20 FPGA
-- Lecture B4 - Building a Chip: Tiny Vedas on 7nm with OpenRoad and ASAP7
-
-Preorder your bonus lectures [here](https://buy.stripe.com/00g3fy97Mcdb4UwbIO).
-Use code YT2025 at checkout for 25% off.
-
-# What computer do I need?
-
-All the course is designed to run on the latest LTS of Ubuntu. You can get it [here](https://ubuntu.com/download/desktop).
-
-Anything built after in the last decade should be more than enough to run the course.
-
-# Cloning this repo
-
-In order to run the examples for each lecture, you need to clone this repo. Make sure to add and use an SSH Key to your Github account.
-
-After that, you can clone the repo using the following command:
-
-```bash
-git clone git@github.com:siliscale/Tiny-Vedas.git
+```
+tiny-vedas/
+├── rtl/                   # RTL design files
+│   ├── core_top.sv        # Top-level processor module
+│   ├── core_top.flist     # File list for synthesis
+│   ├── ifu/               # Instruction fetch unit
+│   │   ├── ifu.sv         # IFU implementation
+│   │   ├── bht.sv         # BHT implementation
+│   │   └── btb.sv         # BTB implementation
+│   ├── idu/               # Instruction decode units
+│   │   ├── idu0.sv        # Decode stage 0
+│   │   ├── idu1.sv        # Decode stage 1
+│   │   ├── reg_file.sv    # Register file
+│   │   ├── decode.sv      # Auto-generated decode logic
+│   │   └── decode         # Decode table specification
+│   ├── exu/               # Execute unit
+│   │   ├── exu.sv         # Execute unit top-level
+│   │   ├── alu.sv         # Arithmetic logic unit
+│   │   ├── mul.sv         # Multiplier unit
+│   │   ├── div.sv         # Divider unit
+│   │   ├── lsu.sv         # Load/store unit
+│   │   └── mac.sv         # Mac unit
+│   ├── custom/            # Custom implementation
+│   │   └── perf_cntr.sv   # Just an helper
+│   ├── include/           # Global definitions
+│   │   ├── global.svh     # Global parameters
+│   │   └── types.svh      # Type definitions
+│   └── lib/               # Utility modules
+│       ├── mem_lib.sv     # Memory modules
+│       └── beh_lib.sv     # Behavioral models
+├── tests/                 # Test programs
+│   ├── asm/               # Assembly test programs
+│   ├── c/                 # C program tests
+│   └── raw/               # Raw binary tests
+├── dv/                    # Design verification
+│   ├── sv/                # SystemVerilog testbenches
+│   │   ├── core_top_tb.sv # Main testbench
+│   │   └── lsu_tb.sv      # LSU testbench
+│   └── verilator/         # Verilator simulation files
+├── tools/                 # Development utilities
+│   ├── dec_table_gen.py   # Decode table generator
+│   ├── sim_manager.py     # Simulation manager
+│   └── riscv_sim          # RISC-V simulator improved with SPIKE
+└── LICENSE                # MIT license
 ```
 
-# Running the examples
+## Quick Start
 
-Each lecture has its own folder. Inside each folder, you will find a `slides.md` file that contains the slides for the lecture, and a `Makefile` that will run the examples.
+### Prerequisites
+- **SystemVerilog Simulator**: Verilator
+- **RISC-V Toolchain**: GCC with RISC-V target
+- **Python 3**: For build scripts
+- **custom SPIKE**: For custom MAC instruction simulation
+- **Ubuntu 20.04+**: Tested platform
 
-Before running the examples, make sure you have [installed the dependencies](docs/lecture_1/notes.md).
+### Installation
 
-To run the examples, simply navigate to the lecture's `code` folder and run the `make` command.
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/siliscale/Tiny-Vedas.git
+   cd Tiny-Vedas
+   ```
 
-```bash
-cd docs/lecture_{N}/code
-make
-```
+2. **Install dependencies**
+   ```bash
+   # Install Verilator
+   sudo apt-get install verilator
+   
+   # Install RISC-V toolchain
+   sudo apt-get install gcc-riscv64-linux-gnu
 
-# Need Support?
+   # Compile SPIKE
+   refer to documentation in dependencies/riscv-isa-sim
 
-Open a Github issue.
+   ```
+
+3. **Build and run simulation**
+   ```bash
+   # Run core simulation and ISS verification
+   python3 tools/sim_manager.py -s verilator [-n asm.<testname>] [-t tests/smoke.tlist] {-d}
+   
+   ```
+
+## Verification
+
+### Test Results
+Simulation results are logged to:
+- `rtl.log`: Instruction execution trace
+- `iss.log`: ISS execution trace
+- `console.log`: Program output
+- Waveform files: For detailed timing analysis
