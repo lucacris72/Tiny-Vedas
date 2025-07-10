@@ -120,7 +120,7 @@ module mac (
   // Forward path: if stage4 holds a MAC, forward its result
   logic [XLEN-1:0] acc_src;
   always_comb begin
-    if (s4_ctrl.macrst) begin
+    if (s3_ctrl.macrst) begin
       acc_src = '0;
     end else if (s4_ctrl.mac && !freeze) begin
       acc_src = s4_out;
